@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balu 3D - Impressões 3D Geek & Gamer</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container header-content">
+            <div class="logo">
+                <h1><i class="fas fa-cube"></i> BALU<span>3D</span></h1>
+            </div>
+            <nav class="nav-menu">
+                <a href="#home">Início</a>
+                <a href="#produtos">Produtos</a>
+                <a href="#ajuda">Ajuda</a>
+                <a href="#" onclick="showPage('login')">Login</a>
+                <a href="#" onclick="showPage('cart')"><i class="fas fa-shopping-cart"></i> <span id="cart-count">0</span></a>
+            </nav>
+            <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="main-content">
+        <!-- Home Page -->
+        <div id="home-page" class="page active">
+            <!-- Hero Carousel -->
+            <section id="home" class="hero-carousel">
+                <div class="carousel-container">
+                    <div class="carousel-slides" id="carousel-slides">
+                        <!-- Slides will be dynamically loaded -->
+                    </div>
+                    <button class="carousel-btn prev" onclick="moveCarousel(-1)">&#10094;</button>
+                    <button class="carousel-btn next" onclick="moveCarousel(1)">&#10095;</button>
+                    <div class="carousel-dots" id="carousel-dots"></div>
+                </div>
+                <div class="hero-overlay">
+                    <h2>Impressões 3D que dão vida à sua imaginação</h2>
+                    <p>Peças exclusivas para gamers e geeks</p>
+                    <a href="#produtos" class="btn-primary">Ver Produtos</a>
+                </div>
+            </section>
+
+            <!-- Featured Products -->
+            <section class="featured-products">
+                <div class="container">
+                    <h2 class="section-title">Produtos em Destaque</h2>
+                    <div class="products-grid" id="featured-products">
+                        <!-- Products will be dynamically loaded -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Features -->
+            <section class="features">
+                <div class="container">
+                    <div class="features-grid">
+                        <div class="feature-card">
+                            <i class="fas fa-shipping-fast"></i>
+                            <h3>Entrega Rápida</h3>
+                            <p>Enviamos para todo o Brasil</p>
+                        </div>
+                        <div class="feature-card">
+                            <i class="fas fa-paint-brush"></i>
+                            <h3>Personalização</h3>
+                            <p>Peças únicas e exclusivas</p>
+                        </div>
+                        <div class="feature-card">
+                            <i class="fas fa-shield-alt"></i>
+                            <h3>Qualidade Garantida</h3>
+                            <p>Materiais de alta durabilidade</p>
+                        </div>
+                        <div class="feature-card">
+                            <i class="fab fa-whatsapp"></i>
+                            <h3>Suporte WhatsApp</h3>
+                            <p>Atendimento direto e rápido</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Products Page -->
+        <div id="products-page" class="page">
+            <section class="products-section">
+                <div class="container">
+                    <h2 class="section-title">Todos os Produtos</h2>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" onclick="filterProducts('todos')">Todos</button>
+                        <button class="filter-btn" onclick="filterProducts('action-figures')">Action Figures</button>
+                        <button class="filter-btn" onclick="filterProducts('decoracao')">Decoração</button>
+                        <button class="filter-btn" onclick="filterProducts('acessorios')">Acessórios</button>
+                        <button class="filter-btn" onclick="filterProducts('games')">Games</button>
+                    </div>
+                    <div class="products-grid" id="all-products">
+                        <!-- Products will be dynamically loaded -->
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Login/Register Page -->
+        <div id="login-page" class="page">
+            <section class="auth-section">
+                <div class="container">
+                    <div class="auth-container">
+                        <div class="auth-forms">
+                            <form id="login-form" class="auth-form active" onsubmit="handleLogin(event)">
+                                <h2>Login</h2>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" required placeholder="seu@email.com">
+                                </div>
+                                <div class="form-group">
+                                    <label>Senha</label>
+                                    <input type="password" required placeholder="********">
+                                </div>
+                                <button type="submit" class="btn-primary">Entrar</button>
+                                <p class="auth-switch">Não tem conta? <a href="#" onclick="showAuthForm('register')">Cadastre-se</a></p>
+                            </form>
+                            <form id="register-form" class="auth-form" onsubmit="handleRegister(event)">
+                                <h2>Cadastro</h2>
+                                <div class="form-group">
+                                    <label>Nome Completo</label>
+                                    <input type="text" required placeholder="Seu nome">
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" required placeholder="seu@email.com">
+                                </div>
+                                <div class="form-group">
+                                    <label>Senha</label>
+                                    <input type="password" required placeholder="********">
+                                </div>
+                                <div class="form-group">
+                                    <label>Confirmar Senha</label>
+                                    <input type="password" required placeholder="********">
+                                </div>
+                                <button type="submit" class="btn-primary">Cadastrar</button>
+                                <p class="auth-switch">Já tem conta? <a href="#" onclick="showAuthForm('login')">Fazer Login</a></p>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- My Orders Page -->
+        <div id="orders-page" class="page">
+            <section class="orders-section">
+                <div class="container">
+                    <h2 class="section-title">Minhas Compras</h2>
+                    <div class="orders-list" id="orders-list">
+                        <!-- Orders will be dynamically loaded -->
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Tracking Page -->
+        <div id="tracking-page" class="page">
+            <section class="tracking-section">
+                <div class="container">
+                    <h2 class="section-title">Rastreamento</h2>
+                    <div class="tracking-search">
+                        <input type="text" id="tracking-code" placeholder="Digite o código do pedido">
+                        <button class="btn-primary" onclick="trackOrder()">Rastrear</button>
+                    </div>
+                    <div class="tracking-result" id="tracking-result">
+                        <!-- Tracking info will be displayed here -->
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Cart/Checkout Page -->
+        <div id="cart-page" class="page">
+            <section class="cart-section">
+                <div class="container">
+                    <h2 class="section-title">Carrinho</h2>
+                    <div class="cart-container">
+                        <div class="cart-items" id="cart-items">
+                            <!-- Cart items will be displayed here -->
+                        </div>
+                        <div class="cart-summary">
+                            <h3>Resumo do Pedido</h3>
+                            <div class="summary-row">
+                                <span>Subtotal:</span>
+                                <span id="cart-subtotal">R$ 0,00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span>Frete:</span>
+                                <span id="cart-shipping">R$ 0,00</span>
+                            </div>
+                            <div class="summary-row total">
+                                <span>Total:</span>
+                                <span id="cart-total">R$ 0,00</span>
+                            </div>
+                            <button class="btn-primary btn-full" onclick="showPage('checkout')">Finalizar Compra</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Checkout Page -->
+        <div id="checkout-page" class="page">
+            <section class="checkout-section">
+                <div class="container">
+                    <h2 class="section-title">Finalizar Compra</h2>
+                    <div class="checkout-container">
+                        <form class="checkout-form" onsubmit="processCheckout(event)">
+                            <h3>Dados de Entrega</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Nome Completo</label>
+                                    <input type="text" required id="checkout-name">
+                                </div>
+                                <div class="form-group">
+                                    <label>CPF</label>
+                                    <input type="text" required id="checkout-cpf" placeholder="000.000.000-00">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Endereço</label>
+                                    <input type="text" required id="checkout-address">
+                                </div>
+                                <div class="form-group">
+                                    <label>Número</label>
+                                    <input type="text" required id="checkout-number">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Bairro</label>
+                                    <input type="text" required id="checkout-neighborhood">
+                                </div>
+                                <div class="form-group">
+                                    <label>Cidade</label>
+                                    <input type="text" required id="checkout-city">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Estado</label>
+                                    <select required id="checkout-state">
+                                        <option value="">Selecione</option>
+                                        <option value="SP">São Paulo</option>
+                                        <option value="RJ">Rio de Janeiro</option>
+                                        <option value="MG">Minas Gerais</option>
+                                        <option value="RS">Rio Grande do Sul</option>
+                                        <option value="PR">Paraná</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>CEP</label>
+                                    <input type="text" required id="checkout-cep" placeholder="00000-000">
+                                </div>
+                            </div>
+                            <h3>Forma de Pagamento</h3>
+                            <div class="payment-methods">
+                                <label class="payment-option">
+                                    <input type="radio" name="payment" value="pix" checked>
+                                    <span><i class="fas fa-qrcode"></i> PIX</span>
+                                </label>
+                                <label class="payment-option">
+                                    <input type="radio" name="payment" value="card">
+                                    <span><i class="fas fa-credit-card"></i> Cartão</span>
+                                </label>
+                                <label class="payment-option">
+                                    <input type="radio" name="payment" value="boleto">
+                                    <span><i class="fas fa-barcode"></i> Boleto</span>
+                                </label>
+                            </div>
+                            <button type="submit" class="btn-primary btn-full">Confirmar Pedido</button>
+                        </form>
+                        <div class="checkout-summary">
+                            <h3>Resumo</h3>
+                            <div id="checkout-items">
+                                <!-- Items will be displayed here -->
+                            </div>
+                            <div class="summary-row total">
+                                <span>Total:</span>
+                                <span id="checkout-total">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Order Confirmation Page -->
+        <div id="confirmation-page" class="page">
+            <section class="confirmation-section">
+                <div class="container">
+                    <div class="confirmation-message">
+                        <div class="success-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <h2>Obrigado pela sua compra!</h2>
+                        <p class="order-number">Pedido #<span id="order-number"></span></p>
+                        <p class="thank-you">Sua compra foi confirmada com sucesso! 🎉</p>
+                        <p class="confirmation-details">Enviamos um email com todos os detalhes do seu pedido.</p>
+                        <p class="tracking-info">Você pode acompanhar o status do seu pedido na área de "Meus Pedidos".</p>
+                        <div class="confirmation-actions">
+                            <button class="btn-primary" onclick="showPage('orders')">Ver Meus Pedidos</button>
+                            <button class="btn-secondary" onclick="showPage('home')">Continuar Comprando</button>
+                        </div>
+                        <div class="social-share">
+                            <p>Compartilhe sua alegria:</p>
+                            <div class="share-buttons">
+                                <a href="#" class="share-btn whatsapp"><i class="fab fa-whatsapp"></i></a>
+                                <a href="#" class="share-btn instagram"><i class="fab fa-instagram"></i></a>
+                                <a href="#" class="share-btn twitter"><i class="fab fa-twitter"></i></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Help Page -->
+        <div id="help-page" class="page">
+            <section id="ajuda" class="help-section">
+                <div class="container">
+                    <h2 class="section-title">Precisa de Ajuda?</h2>
+                    <div class="help-content">
+                        <div class="help-card">
+                            <i class="fab fa-whatsapp"></i>
+                            <h3>Fale Conosco no WhatsApp</h3>
+                            <p>Atendimento direto e rápido para tirar suas dúvidas</p>
+                            <a href="https://wa.me/5511999999999" target="_blank" class="btn-whatsapp">
+                                <i class="fab fa-whatsapp"></i> Abrir Conversa
+                            </a>
+                        </div>
+                        <div class="help-card">
+                            <i class="far fa-envelope"></i>
+                            <h3>Email</h3>
+                            <p>contato@balu3d.com.br</p>
+                        </div>
+                        <div class="help-card">
+                            <i class="fab fa-instagram"></i>
+                            <h3>Instagram</h3>
+                            <p>@balu3d.printverso</p>
+                            <a href="https://www.instagram.com/balu3d.printverso/" target="_blank" class="btn-instagram">
+                                <i class="fab fa-instagram"></i> Seguir
+                            </a>
+                        </div>
+                        <div class="faq-section">
+                            <h3>Perguntas Frequentes</h3>
+                            <div class="faq-item">
+                                <button class="faq-question" onclick="toggleFAQ(this)">
+                                    Qual o prazo de entrega?
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                                <div class="faq-answer">
+                                    <p>O prazo varia de 5 a 15 dias úteis dependendo da sua região e da personalização do produto.</p>
+                                </div>
+                            </div>
+                            <div class="faq-item">
+                                <button class="faq-question" onclick="toggleFAQ(this)">
+                                    Aceitam personalizações?
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                                <div class="faq-answer">
+                                    <p>Sim! Entre em contato pelo WhatsApp para solicitar personalizações especiais.</p>
+                                </div>
+                            </div>
+                            <div class="faq-item">
+                                <button class="faq-question" onclick="toggleFAQ(this)">
+                                    Quais formas de pagamento?
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                                <div class="faq-answer">
+                                    <p>Aceitamos PIX, cartão de crédito, boleto e parcelamento em até 12x.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Admin Panel -->
+        <div id="admin-page" class="page">
+            <section class="admin-section">
+                <div class="container">
+                    <h2 class="section-title">Painel Administrativo</h2>
+                    <div class="admin-container">
+                        <div class="admin-sidebar">
+                            <button class="admin-menu-btn active" onclick="showAdminSection('add-product')">
+                                <i class="fas fa-plus-circle"></i> Adicionar Produto
+                            </button>
+                            <button class="admin-menu-btn" onclick="showAdminSection('manage-products')">
+                                <i class="fas fa-list"></i> Gerenciar Produtos
+                            </button>
+                            <button class="admin-menu-btn" onclick="showAdminSection('orders')">
+                                <i class="fas fa-shopping-bag"></i> Pedidos
+                            </button>
+                            <button class="admin-menu-btn" onclick="logoutAdmin()">
+                                <i class="fas fa-sign-out-alt"></i> Sair
+                            </button>
+                        </div>
+                        <div class="admin-content">
+                            <!-- Add Product Section -->
+                            <div id="admin-add-product" class="admin-panel active">
+                                <h3>Adicionar Novo Produto</h3>
+                                <form class="product-form" onsubmit="addProduct(event)">
+                                    <div class="form-group">
+                                        <label>Nome do Produto</label>
+                                        <input type="text" id="product-name" required placeholder="Ex: Action Figure Spider-Man">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Descrição</label>
+                                        <textarea id="product-description" required rows="4" placeholder="Descreva o produto..."></textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Preço (R$)</label>
+                                        <input type="number" id="product-price" step="0.01" required placeholder="0.00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Categoria</label>
+                                        <select id="product-category" required>
+                                            <option value="action-figures">Action Figures</option>
+                                            <option value="decoracao">Decoração</option>
+                                            <option value="acessorios">Acessórios</option>
+                                            <option value="games">Games</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Imagens (até 5)</label>
+                                        <div class="image-upload-container">
+                                            <div class="image-preview" id="image-preview-1">
+                                                <input type="file" accept="image/*" onchange="previewImage(this, 1)">
+                                                <span class="upload-text"><i class="fas fa-cloud-upload-alt"></i><br>Imagem 1</span>
+                                            </div>
+                                            <div class="image-preview" id="image-preview-2">
+                                                <input type="file" accept="image/*" onchange="previewImage(this, 2)">
+                                                <span class="upload-text"><i class="fas fa-cloud-upload-alt"></i><br>Imagem 2</span>
+                                            </div>
+                                            <div class="image-preview" id="image-preview-3">
+                                                <input type="file" accept="image/*" onchange="previewImage(this, 3)">
+                                                <span class="upload-text"><i class="fas fa-cloud-upload-alt"></i><br>Imagem 3</span>
+                                            </div>
+                                            <div class="image-preview" id="image-preview-4">
+                                                <input type="file" accept="image/*" onchange="previewImage(this, 4)">
+                                                <span class="upload-text"><i class="fas fa-cloud-upload-alt"></i><br>Imagem 4</span>
+                                            </div>
+                                            <div class="image-preview" id="image-preview-5">
+                                                <input type="file" accept="image/*" onchange="previewImage(this, 5)">
+                                                <span class="upload-text"><i class="fas fa-cloud-upload-alt"></i><br>Imagem 5</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Destaque</label>
+                                        <input type="checkbox" id="product-featured"> Marcar como produto em destaque
+                                    </div>
+                                    <button type="submit" class="btn-primary">Salvar Produto</button>
+                                </form>
+                            </div>
+                            <!-- Manage Products Section -->
+                            <div id="admin-manage-products" class="admin-panel">
+                                <h3>Gerenciar Produtos</h3>
+                                <div class="products-table" id="admin-products-list">
+                                    <!-- Products will be loaded here -->
+                                </div>
+                            </div>
+                            <!-- Orders Section -->
+                            <div id="admin-orders" class="admin-panel">
+                                <h3>Pedidos</h3>
+                                <div class="orders-table" id="admin-orders-list">
+                                    <!-- Orders will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3><i class="fas fa-cube"></i> BALU<span>3D</span></h3>
+                    <p>Impressões 3D de qualidade para gamers e geeks. Transformamos sua imaginação em realidade!</p>
+                    <div class="social-links">
+                        <a href="https://www.instagram.com/balu3d.printverso/" target="_blank"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-facebook"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="https://wa.me/5511999999999" target="_blank"><i class="fab fa-whatsapp"></i></a>
+                    </div>
+                </div>
+                <div class="footer-section">
+                    <h4>Links Úteis</h4>
+                    <ul>
+                        <li><a href="#home">Início</a></li>
+                        <li><a href="#produtos">Produtos</a></li>
+                        <li><a href="#" onclick="showPage('orders')">Meus Pedidos</a></li>
+                        <li><a href="#ajuda">Ajuda</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Contato</h4>
+                    <ul>
+                        <li><i class="fas fa-envelope"></i> contato@balu3d.com.br</li>
+                        <li><i class="fab fa-whatsapp"></i> (11) 99999-9999</li>
+                        <li><i class="fas fa-map-marker-alt"></i> São Paulo, SP</li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Formas de Pagamento</h4>
+                    <div class="payment-icons">
+                        <i class="fab fa-cc-visa"></i>
+                        <i class="fab fa-cc-mastercard"></i>
+                        <i class="fas fa-qrcode"></i>
+                        <i class="fas fa-barcode"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Balu 3D. Todos os direitos reservados.</p>
+                <p style="font-size: 12px; margin-top: 5px;">
+                    <a href="#" onclick="showPage('admin')" style="color: #666;">Área Admin</a>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
