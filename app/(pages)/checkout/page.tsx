@@ -18,7 +18,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-grid-dark">
-      <Navbar cartCount={2} />
+      <Navbar />
 
       <main className="flex-1 pt-32 pb-24 px-4 md:px-8">
         <div className="max-w-7xl mx-auto">
