@@ -49,7 +49,7 @@ function formatExpiry(v: string) {
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { items, total, clear } = useCart()
+  const { items, total, clear, loading: cartLoading } = useCart()
   const { user } = useAuth()
 
   const [shipping, setShipping] = useState('pac')
@@ -175,6 +175,17 @@ export default function CheckoutPage() {
     `w-full bg-black/40 border-2 rounded-2xl px-6 py-4 text-white placeholder:text-zinc-700 outline-none transition-all ${
       errors[field] ? 'border-red-500 focus:border-red-400' : 'border-white/5 focus:border-[#00f3ff] focus:shadow-[0_0_15px_rgba(0,243,255,0.1)]'
     }`
+
+  if (cartLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-10 h-10 border-2 border-[#00f3ff] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    )
+  }
 
   if (items.length === 0) {
     return (

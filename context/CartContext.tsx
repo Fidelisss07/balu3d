@@ -45,8 +45,9 @@ function saveLocal(items: CartItem[]) {
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const [items, setItems] = useState<CartItem[]>([])
-  const [loading, setLoading] = useState(false)
+  // Lê localStorage de forma síncrona para evitar flash de carrinho vazio
+  const [items, setItems] = useState<CartItem[]>(() => loadLocal())
+  const [loading, setLoading] = useState(true)
 
   // Carrega carrinho — Firestore se logado, localStorage se não
   useEffect(() => {
@@ -73,9 +74,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           setItems(firestoreItems)
         }
       } else {
-        setItems(loadLocal())
+        // localStorage já foi lido no useState inicial — só finaliza o loading
+        setLoading(false)
       }
-      setLoading(false)
     }
     load()
   }, [user])
