@@ -1,0 +1,135 @@
+'use client'
+
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { useAuth } from './AuthContext'
+import { getCart, saveCart, clearCart, type CartItem } from '@/lib/db'
+
+interface CartContextType {
+  items: CartItem[]
+  count: number
+  total: number
+  addItem: (item: Omit<CartItem, 'qty'> & { qty?: number }) => void
+  removeItem: (slug: string) => void
+  updateQty: (slug: string, qty: number) => void
+  clear: () => void
+  loading: boolean
+}
+
+const CartContext = createContext<CartContextType>({
+  items: [],
+  count: 0,
+  total: 0,
+  addItem: () => {},
+  removeItem: () => {},
+  updateQty: () => {},
+  clear: () => {},
+  loading: false,
+})
+
+const LOCAL_KEY = 'balu3d_cart'
+
+function loadLocal(): CartItem[] {
+  if (typeof window === 'undefined') return []
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+
+function saveLocal(items: CartItem[]) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(items))
+  }
+}
+
+export function CartProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+  const [items, setItems] = useState<CartItem[]>([])
+  const [loading, setLoading] = useState(false)
+
+  // Carrega carrinho — Firestore se logado, localStorage se não
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      if (user) {
+        const firestoreItems = await getCart(user.uid)
+        // Merge com localStorage (itens adicionados sem login)
+        const local = loadLocal()
+        if (local.length > 0) {
+          const merged = [...firestoreItems]
+          for (const li of local) {
+            const existing = merged.find((i) => i.slug === li.slug)
+            if (existing) {
+              existing.qty += li.qty
+            } else {
+              merged.push(li)
+            }
+          }
+          setItems(merged)
+          await saveCart(user.uid, merged)
+          localStorage.removeItem(LOCAL_KEY)
+        } else {
+          setItems(firestoreItems)
+        }
+      } else {
+        setItems(loadLocal())
+      }
+      setLoading(false)
+    }
+    load()
+  }, [user])
+
+  // Persiste sempre que items mudam
+  useEffect(() => {
+    if (loading) return
+    if (user) {
+      saveCart(user.uid, items)
+    } else {
+      saveLocal(items)
+    }
+  }, [items, user, loading])
+
+  const addItem = useCallback((item: Omit<CartItem, 'qty'> & { qty?: number }) => {
+    setItems((prev) => {
+      const existing = prev.find((i) => i.slug === item.slug)
+      if (existing) {
+        return prev.map((i) =>
+          i.slug === item.slug ? { ...i, qty: i.qty + (item.qty ?? 1) } : i
+        )
+      }
+      return [...prev, { ...item, qty: item.qty ?? 1 }]
+    })
+  }, [])
+
+  const removeItem = useCallback((slug: string) => {
+    setItems((prev) => prev.filter((i) => i.slug !== slug))
+  }, [])
+
+  const updateQty = useCallback((slug: string, qty: number) => {
+    if (qty <= 0) {
+      setItems((prev) => prev.filter((i) => i.slug !== slug))
+    } else {
+      setItems((prev) => prev.map((i) => (i.slug === slug ? { ...i, qty } : i)))
+    }
+  }, [])
+
+  const clear = useCallback(async () => {
+    setItems([])
+    if (user) await clearCart(user.uid)
+    else localStorage.removeItem(LOCAL_KEY)
+  }, [user])
+
+  const count = items.reduce((s, i) => s + i.qty, 0)
+  const total = items.reduce((s, i) => s + i.price * i.qty, 0)
+
+  return (
+    <CartContext.Provider value={{ items, count, total, addItem, removeItem, updateQty, clear, loading }}>
+      {children}
+    </CartContext.Provider>
+  )
+}
+
+export function useCart() {
+  return useContext(CartContext)
+}
