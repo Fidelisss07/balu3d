@@ -48,6 +48,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // Lê localStorage de forma síncrona para evitar flash de carrinho vazio
   const [items, setItems] = useState<CartItem[]>(() => loadLocal())
   const [loading, setLoading] = useState(false)
+  // Controla se o carregamento inicial já terminou (evita salvar [] antes de carregar)
+  const [initialized, setInitialized] = useState(false)
 
   // Carrega carrinho — Firestore se logado, localStorage se não
   // Aguarda o Auth resolver antes de agir
@@ -80,22 +82,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
           // fallback: mantém o que está no localStorage
         } finally {
           setLoading(false)
+          setInitialized(true)
         }
+      } else {
+        // sem user: localStorage já está no estado inicial
+        setInitialized(true)
       }
-      // sem user: localStorage já está no estado inicial
     }
     load()
   }, [user, authLoading])
 
-  // Persiste sempre que items mudam
+  // Persiste sempre que items mudam — só após inicialização completa
   useEffect(() => {
-    if (loading) return
+    if (!initialized) return
     if (user) {
       saveCart(user.uid, items)
     } else {
       saveLocal(items)
     }
-  }, [items, user, loading])
+  }, [items, user, initialized])
 
   const addItem = useCallback((item: Omit<CartItem, 'qty'> & { qty?: number }) => {
     setItems((prev) => {
