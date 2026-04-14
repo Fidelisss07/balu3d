@@ -43,9 +43,11 @@ export interface Order {
     email: string
     cep: string
     logradouro: string
+    bairro?: string
     city: string
     state: string
   }
+  paymentMethod?: 'credito' | 'pix'
   status: 'confirmado' | 'impressao' | 'transito' | 'entregue' | 'cancelado'
   trackingCode?: string
   carrier?: string
