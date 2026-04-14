@@ -44,42 +44,48 @@ function saveLocal(items: CartItem[]) {
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   // Lê localStorage de forma síncrona para evitar flash de carrinho vazio
   const [items, setItems] = useState<CartItem[]>(() => loadLocal())
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
 
   // Carrega carrinho — Firestore se logado, localStorage se não
+  // Aguarda o Auth resolver antes de agir
   useEffect(() => {
+    if (authLoading) return
     async function load() {
-      setLoading(true)
       if (user) {
-        const firestoreItems = await getCart(user.uid)
-        // Merge com localStorage (itens adicionados sem login)
-        const local = loadLocal()
-        if (local.length > 0) {
-          const merged = [...firestoreItems]
-          for (const li of local) {
-            const existing = merged.find((i) => i.slug === li.slug)
-            if (existing) {
-              existing.qty += li.qty
-            } else {
-              merged.push(li)
+        setLoading(true)
+        try {
+          const firestoreItems = await getCart(user.uid)
+          const local = loadLocal()
+          if (local.length > 0) {
+            const merged = [...firestoreItems]
+            for (const li of local) {
+              const existing = merged.find((i) => i.slug === li.slug)
+              if (existing) {
+                existing.qty += li.qty
+              } else {
+                merged.push(li)
+              }
             }
+            setItems(merged)
+            await saveCart(user.uid, merged)
+            localStorage.removeItem(LOCAL_KEY)
+          } else {
+            setItems(firestoreItems)
           }
-          setItems(merged)
-          await saveCart(user.uid, merged)
-          localStorage.removeItem(LOCAL_KEY)
-        } else {
-          setItems(firestoreItems)
+        } catch (err) {
+          console.error('Erro ao carregar carrinho do Firestore:', err)
+          // fallback: mantém o que está no localStorage
+        } finally {
+          setLoading(false)
         }
-      } else {
-        // localStorage já foi lido no useState inicial — só finaliza o loading
-        setLoading(false)
       }
+      // sem user: localStorage já está no estado inicial
     }
     load()
-  }, [user])
+  }, [user, authLoading])
 
   // Persiste sempre que items mudam
   useEffect(() => {
