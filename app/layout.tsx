@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 import { CartProvider } from '@/context/CartContext'
+import { CarouselProvider } from '@/context/CarouselContext'
 
 export const metadata: Metadata = {
   title: 'Balu 3D | Impressões 3D Geek & Gamer',
@@ -14,7 +15,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <CartProvider>
-            {children}
+            <CarouselProvider>
+              {children}
+            </CarouselProvider>
           </CartProvider>
         </AuthProvider>
       </body>

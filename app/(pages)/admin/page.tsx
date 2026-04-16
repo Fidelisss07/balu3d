@@ -12,10 +12,11 @@ import {
   deleteFirestoreProduct, type Order, type TrackingEvent
 } from '@/lib/db'
 import { catalog } from '@/lib/catalog'
+import { AdminCarouselEditor } from '@/components/AdminCarouselEditor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AdminTab = 'dashboard' | 'pedidos' | 'kanban' | 'produtos' | 'criar-produto' | 'clientes' | 'relatorio'
+type AdminTab = 'dashboard' | 'pedidos' | 'kanban' | 'carrosseís' | 'produtos' | 'criar-produto' | 'clientes' | 'relatorio'
 
 interface FirestoreProduct {
   id: string
@@ -547,6 +548,7 @@ export default function AdminPage() {
     { id: 'dashboard', icon: 'lucide:layout-dashboard', label: 'Dashboard' },
     { id: 'pedidos', icon: 'lucide:shopping-cart', label: 'Pedidos' },
     { id: 'kanban', icon: 'lucide:kanban', label: 'Fila Kanban' },
+    { id: 'carrosseís', icon: 'lucide:image', label: 'Carrosséis' },
     { id: 'relatorio', icon: 'lucide:bar-chart-2', label: 'Relatório' },
     { id: 'produtos', icon: 'lucide:box', label: 'Produtos' },
     { id: 'criar-produto', icon: 'lucide:plus-circle', label: 'Criar Produto' },
@@ -875,6 +877,11 @@ export default function AdminPage() {
                   </div>
                 )}
               </>
+            )}
+
+            {/* ── CARROSSÉIS ─────────────────────────────────────────── */}
+            {tab === 'carrosseís' && (
+              <AdminCarouselEditor />
             )}
 
             {/* ── RELATÓRIO ──────────────────────────────────────────── */}

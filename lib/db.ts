@@ -63,6 +63,21 @@ export interface TrackingEvent {
   detail?: string
 }
 
+export interface CarouselSlide {
+  id: number
+  title: string
+  subtitle: string
+  image: string
+  bgColor: string
+  textColor: string
+  accentColor: string
+}
+
+export interface Carousel {
+  slides: CarouselSlide[]
+  updatedAt?: Timestamp
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CARRINHO
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -183,4 +198,30 @@ export async function updateFirestoreProduct(productId: string, data: Partial<Re
 
 export async function deleteFirestoreProduct(productId: string): Promise<void> {
   await deleteDoc(doc(db, 'products', productId))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CARROSSÉIS (ADMIN)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function getCarousel(): Promise<Carousel> {
+  const snap = await getDoc(doc(db, 'admin', 'carousel'))
+  if (!snap.exists()) {
+    // Retorna padrão se não existir
+    return {
+      slides: [
+        { id: 0, title: 'CHARIZARD', subtitle: 'UNBOUND', image: '', bgColor: '#1a1a1a', textColor: '#00f3ff', accentColor: '#ff6b35' },
+        { id: 1, title: 'DRAGONITE', subtitle: 'LEGENDARY', image: '', bgColor: '#1a1a1a', textColor: '#00f3ff', accentColor: '#4a90e2' },
+        { id: 2, title: 'MEWTWO', subtitle: 'MYTHICAL', image: '', bgColor: '#1a1a1a', textColor: '#00f3ff', accentColor: '#a855f7' },
+      ],
+    }
+  }
+  return snap.data() as Carousel
+}
+
+export async function updateCarousel(carousel: Carousel): Promise<void> {
+  await setDoc(doc(db, 'admin', 'carousel'), {
+    ...carousel,
+    updatedAt: serverTimestamp(),
+  })
 }
