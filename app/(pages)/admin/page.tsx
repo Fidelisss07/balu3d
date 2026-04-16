@@ -565,8 +565,8 @@ export default function AdminPage() {
         />
       )}
 
-      <div className="flex-1 flex pt-20">
-        {/* Sidebar */}
+      <div className="flex-1 flex pt-16 md:pt-20">
+        {/* Sidebar — desktop */}
         <aside className="w-64 bg-black/60 backdrop-blur-xl border-r border-white/5 fixed left-0 h-[calc(100vh-80px)] overflow-y-auto hidden md:block top-20">
           <div className="p-6">
             <div className="mb-3">
@@ -598,8 +598,30 @@ export default function AdminPage() {
           </div>
         </aside>
 
+        {/* Bottom nav — mobile */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-xl border-t border-white/10">
+          <div className="flex items-center justify-around px-2 py-2 overflow-x-auto gap-1">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setTab(item.id)}
+                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl min-w-[48px] flex-shrink-0 transition-all cursor-pointer ${
+                  tab === item.id ? 'text-[#00f3ff]' : 'text-zinc-600'
+                }`}
+              >
+                <Icon icon={item.icon} className="text-lg" />
+                <span className="text-[8px] font-black uppercase leading-none text-center">{item.label.split(' ')[0]}</span>
+              </button>
+            ))}
+            <Link href="/" className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl min-w-[48px] flex-shrink-0 text-zinc-600">
+              <Icon icon="lucide:arrow-left" className="text-lg" />
+              <span className="text-[8px] font-black uppercase leading-none">Site</span>
+            </Link>
+          </div>
+        </nav>
+
         {/* Main */}
-        <main className="flex-1 md:ml-64 p-6 md:p-10">
+        <main className="flex-1 md:ml-64 p-4 md:p-10 pb-24 md:pb-10">
           <div className="max-w-6xl mx-auto">
 
             {/* ── DASHBOARD ──────────────────────────────────────────── */}
@@ -631,7 +653,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Status visual */}
-                <div className="grid grid-cols-5 gap-3 mb-8">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-8">
                   {KANBAN_COLUMNS.map((col) => {
                     const count = orders.filter((o) => o.status === col.id).length
                     const pct = orders.length > 0 ? Math.round((count / orders.length) * 100) : 0
@@ -649,7 +671,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Atalhos */}
-                <div className="grid grid-cols-3 gap-4 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                   <button onClick={() => setTab('pedidos')} className="bg-black border border-zinc-800 rounded-[20px] p-5 flex items-center gap-4 hover:border-[#00f3ff]/40 transition-all cursor-pointer group text-left">
                     <div className="w-10 h-10 rounded-xl bg-[#00f3ff]/10 flex items-center justify-center">
                       <Icon icon="lucide:list-ordered" className="text-[#00f3ff] text-xl" />
@@ -811,7 +833,7 @@ export default function AdminPage() {
                 {dataLoading ? (
                   <div className="flex justify-center py-32"><div className="w-10 h-10 border-2 border-[#00f3ff] border-t-transparent rounded-full animate-spin" /></div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto">
+                  <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 md:grid md:grid-cols-3 lg:grid-cols-5 md:overflow-visible md:pb-0 md:mx-0 md:px-0">
                     {KANBAN_COLUMNS.map((col) => {
                       const colOrders = orders.filter((o) => o.status === col.id)
                       return (
@@ -819,7 +841,7 @@ export default function AdminPage() {
                           key={col.id}
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={() => onDrop(col.id)}
-                          className="bg-black border border-zinc-800 rounded-[24px] p-4 min-h-[200px]"
+                          className="bg-black border border-zinc-800 rounded-[24px] p-4 min-h-[200px] min-w-[180px] md:min-w-0 flex-shrink-0 md:flex-shrink"
                         >
                           <div className="flex items-center gap-2 mb-4">
                             <Icon icon={STATUS_ICON[col.id]} className="text-base" style={{ color: col.color }} />
@@ -1034,7 +1056,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Resumo por categoria */}
-                <div className="grid grid-cols-4 gap-3 mb-8">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
                   {(['Classic', 'Legendary', 'Shiny', 'Limited'] as const).map((cat) => {
                     const count = fsProducts.filter((p) => p.category === cat).length
                     const colors: Record<string, string> = { Classic: '#00f3ff', Legendary: '#ff00ff', Shiny: '#f7c948', Limited: '#00ff00' }
@@ -1143,7 +1165,7 @@ export default function AdminPage() {
                     )}
 
                     {/* Nome (slug auto) */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Nome *</label>
                         <input
@@ -1162,7 +1184,7 @@ export default function AdminPage() {
                     </div>
 
                     {/* Preços */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Preço (R$) *</label>
                         <input
@@ -1186,7 +1208,7 @@ export default function AdminPage() {
                     </div>
 
                     {/* Categoria + Stock + Altura */}
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Categoria</label>
                         <select
@@ -1219,7 +1241,7 @@ export default function AdminPage() {
                     </div>
 
                     {/* Cor + Badges */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Cor Neon</label>
                         <div className="flex gap-3">

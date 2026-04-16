@@ -210,10 +210,10 @@ export default function HomePage() {
         </section>
 
         {/* MAIN PRODUCT CATALOG */}
-        <section id="produtos" className="bg-[#0a0a0a] text-white py-20 md:py-48 px-4 md:px-8 relative overflow-hidden">
+        <section id="produtos" className="bg-[#0a0a0a] text-white py-14 md:py-32 px-4 md:px-8 relative overflow-hidden">
           <div className="max-w-7xl mx-auto relative z-10">
-            <div className="text-center mb-16 md:mb-32">
-              <h2 className="text-4xl sm:text-6xl md:text-8xl font-black uppercase mb-4 leading-none tracking-tighter">Shop Our <span className="text-[#00f3ff]">Pokémon</span> Figures</h2>
+            <div className="text-center mb-10 md:mb-20">
+              <h2 className="text-3xl sm:text-6xl md:text-8xl font-black uppercase mb-4 leading-none tracking-tighter">Shop Our <span className="text-[#00f3ff]">Pokémon</span> Figures</h2>
               <p className="text-zinc-500 font-bold uppercase tracking-[0.4em] text-sm">Colecionáveis de luxo em resina 8K</p>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-12">

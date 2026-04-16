@@ -45,12 +45,12 @@ export default function CartPage() {
     <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
       <Navbar />
 
-      <main className="flex-1 pt-28 pb-24 bg-grid-dark">
+      <main className="flex-1 pt-20 md:pt-28 pb-24 bg-grid-dark">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <div className="flex flex-col gap-6 mb-12">
             <div className="relative">
               <div className="absolute -left-6 top-0 w-2 h-full bg-[#ff00ff]" />
-              <h1 className="text-5xl md:text-7xl font-black uppercase leading-none tracking-tighter">
+              <h1 className="text-4xl md:text-7xl font-black uppercase leading-none tracking-tighter">
                 Seu <span className="text-[#00f3ff]">Carrinho</span>
               </h1>
               <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs mt-2">
