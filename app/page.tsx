@@ -108,7 +108,7 @@ export default function HomePage() {
 
       <main className="flex-1 pt-20">
         {/* HERO CAROUSEL */}
-        <section className="relative w-full h-screen min-h-[600px] md:h-[850px] overflow-hidden">
+        <section className="relative w-full overflow-hidden" style={{ height: 'calc(100svh - 80px)', minHeight: '580px', maxHeight: '900px' }}>
           {/* Slides wrapper */}
           <div
             className="flex h-full transition-transform duration-700 ease-in-out"
@@ -117,29 +117,29 @@ export default function HomePage() {
             {slides.map((slide, idx) => (
               <div
                 key={idx}
-                className={`w-full h-full flex items-center justify-center shrink-0 px-4 md:px-8 relative ${slide.bg}`}
+                className={`w-full h-full flex items-center shrink-0 px-5 md:px-8 relative ${slide.bg}`}
                 style={{ minWidth: '100%' }}
               >
                 <div className={`absolute inset-0 ${slide.bgGradientDir} ${slide.bgGradient} pointer-events-none`}></div>
-                <div className="max-w-7xl w-full grid md:grid-cols-2 items-center gap-8 md:gap-12 relative z-10">
-                  <div>
+                <div className="max-w-7xl w-full mx-auto grid md:grid-cols-2 items-center gap-6 md:gap-12 relative z-10">
+                  <div className="flex flex-col justify-center">
                     <span
-                      className="inline-block px-4 py-2 text-xs font-black uppercase tracking-[0.4em] mb-4 md:mb-6 rounded-sm"
+                      className="inline-block self-start px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.3em] mb-4 md:mb-6 rounded-sm"
                       style={{ backgroundColor: slide.badgeBg, boxShadow: `0 0 20px ${slide.badgeColor}99`, color: slide.badgeText === 'text-black' ? '#000' : '#fff' }}
                     >{slide.badge}</span>
-                    <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-[9rem] font-black mb-4 md:mb-8 leading-[0.85] md:leading-[0.75] tracking-tighter text-white">
+                    <h1 className="text-[clamp(3rem,12vw,9rem)] font-black mb-3 md:mb-8 leading-[0.85] tracking-tighter text-white">
                       {slide.title}<br />
                       <span className={`text-transparent bg-clip-text bg-gradient-to-r ${slide.subtitleGradient}`}>{slide.subtitle}</span>
                     </h1>
-                    <p className="text-base md:text-xl text-zinc-300 mb-6 md:mb-12 max-w-lg leading-relaxed">{slide.desc}</p>
-                    <div className="hidden sm:flex flex-wrap gap-3 md:gap-4 mb-6 md:mb-10">
+                    <p className="text-sm md:text-xl text-zinc-300 mb-5 md:mb-10 max-w-lg leading-relaxed line-clamp-2 md:line-clamp-none">{slide.desc}</p>
+                    <div className="hidden sm:flex flex-wrap gap-3 md:gap-4 mb-5 md:mb-10">
                       {slide.tags.map((tag) => (
                         <span key={tag} className="px-3 md:px-4 py-2 bg-zinc-800 rounded-lg text-xs font-bold border border-white/10">{tag}</span>
                       ))}
                     </div>
                     <Link
                       href="/produtos"
-                      className={`inline-flex items-center gap-4 md:gap-6 bg-zinc-900 border-2 px-8 md:px-12 py-4 md:py-6 rounded-2xl font-black uppercase text-base md:text-lg tracking-widest transition-all hover:scale-105 shadow-[0_0_30px_rgba(0,243,255,0.3)] ${slide.ctaColor}`}
+                      className={`self-start inline-flex items-center gap-3 md:gap-6 bg-zinc-900 border-2 px-6 md:px-12 py-3.5 md:py-6 rounded-2xl font-black uppercase text-sm md:text-lg tracking-widest transition-all hover:scale-105 shadow-[0_0_30px_rgba(0,243,255,0.3)] ${slide.ctaColor}`}
                     >
                       {slide.ctaText} <Icon icon={slide.ctaIcon} />
                     </Link>
