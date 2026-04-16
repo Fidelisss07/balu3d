@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { Icon } from '@iconify/react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import { useCarousel } from '@/context/CarouselContext'
 
 const pokeCatalog = [
   { name: 'Pikachu', price: '45,00', color: '#00f3ff', img: 'https://images.unsplash.com/photo-1613771404721-1f92d799e49f?q=80&w=400' },
@@ -92,15 +93,27 @@ const slides = [
 ]
 
 export default function HomePage() {
+  const { carousel, loading: carouselLoading } = useCarousel()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [currentSlide, setCurrentSlide] = useState(0)
 
+  // Usa carrossel do Firestore se disponível, caso contrário usa fallback estático
+  const slidesToUse = carousel?.slides && carousel.slides.length > 0 ? carousel.slides : slides.map((s, idx) => ({
+    id: idx,
+    title: s.title,
+    subtitle: s.subtitle,
+    image: s.img,
+    bgColor: idx === 0 ? '#1a1a1a' : idx === 1 ? '#000000' : '#1a1a1a',
+    textColor: s.ctaColor.includes('00f3ff') ? '#00f3ff' : s.ctaColor.includes('ff00ff') ? '#ff00ff' : '#00ff00',
+    accentColor: s.ctaColor.includes('00f3ff') ? '#00f3ff' : s.ctaColor.includes('ff00ff') ? '#ff00ff' : '#00ff00',
+  }))
+
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length)
+      setCurrentSlide((prev) => (prev + 1) % slidesToUse.length)
     }, 5000)
     return () => clearInterval(timer)
-  }, [])
+  }, [slidesToUse.length])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -109,79 +122,81 @@ export default function HomePage() {
       <main className="flex-1 pt-20">
         {/* HERO CAROUSEL */}
         <section className="relative w-full overflow-hidden" style={{ height: 'calc(100svh - 80px)', minHeight: '580px', maxHeight: '900px' }}>
-          {/* Slides wrapper */}
-          <div
-            className="flex h-full transition-transform duration-700 ease-in-out"
-            style={{ transform: `translateX(-${currentSlide * 100}%)` }}
-          >
-            {slides.map((slide, idx) => (
+          {carouselLoading ? (
+            <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a]">
+              <div className="w-10 h-10 border-2 border-[#00f3ff] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* Slides wrapper */}
               <div
-                key={idx}
-                className={`w-full h-full flex items-center shrink-0 px-5 md:px-8 relative ${slide.bg}`}
-                style={{ minWidth: '100%' }}
+                className="flex h-full transition-transform duration-700 ease-in-out"
+                style={{ transform: `translateX(-${currentSlide * 100}%)` }}
               >
-                <div className={`absolute inset-0 ${slide.bgGradientDir} ${slide.bgGradient} pointer-events-none`}></div>
-                <div className="max-w-7xl w-full mx-auto grid md:grid-cols-2 items-center gap-6 md:gap-12 relative z-10">
-                  <div className="flex flex-col justify-center min-w-0 overflow-hidden">
-                    <span
-                      className="inline-block self-start px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.3em] mb-4 md:mb-6 rounded-sm"
-                      style={{ backgroundColor: slide.badgeBg, boxShadow: `0 0 20px ${slide.badgeColor}99`, color: slide.badgeText === 'text-black' ? '#000' : '#fff' }}
-                    >{slide.badge}</span>
-                    <h1 className="text-[clamp(2.5rem,8vw,7rem)] font-black mb-3 md:mb-8 leading-[0.85] tracking-tighter text-white break-words overflow-hidden">
-                      {slide.title}<br />
-                      <span className={`text-transparent bg-clip-text bg-gradient-to-r ${slide.subtitleGradient}`}>{slide.subtitle}</span>
-                    </h1>
-                    <p className="text-sm md:text-xl text-zinc-300 mb-5 md:mb-10 max-w-lg leading-relaxed line-clamp-2 md:line-clamp-none">{slide.desc}</p>
-                    <div className="hidden sm:flex flex-wrap gap-3 md:gap-4 mb-5 md:mb-10">
-                      {slide.tags.map((tag) => (
-                        <span key={tag} className="px-3 md:px-4 py-2 bg-zinc-800 rounded-lg text-xs font-bold border border-white/10">{tag}</span>
-                      ))}
+                {slidesToUse.map((slide, idx) => (
+                  <div
+                    key={slide.id}
+                    className="w-full h-full flex items-center shrink-0 px-5 md:px-8 relative"
+                    style={{ minWidth: '100%', backgroundColor: slide.bgColor }}
+                  >
+                    <div className="absolute inset-0 bg-grid-dark pointer-events-none opacity-40"></div>
+                    <div className="max-w-7xl w-full mx-auto grid md:grid-cols-2 items-center gap-6 md:gap-12 relative z-10">
+                      <div className="flex flex-col justify-center min-w-0 overflow-hidden">
+                        <h1 className="text-[clamp(2.5rem,8vw,7rem)] font-black mb-3 md:mb-8 leading-[0.85] tracking-tighter break-words overflow-hidden" style={{ color: slide.textColor }}>
+                          {slide.title}<br />
+                          <span style={{ color: slide.accentColor }}>{slide.subtitle}</span>
+                        </h1>
+                        <Link
+                          href="/produtos"
+                          className="self-start inline-flex items-center gap-3 md:gap-6 bg-zinc-900 border-2 px-6 md:px-12 py-3.5 md:py-6 rounded-2xl font-black uppercase text-sm md:text-lg tracking-widest transition-all hover:scale-105"
+                          style={{ borderColor: slide.textColor, color: slide.textColor }}
+                        >
+                          VER PRODUTO <Icon icon="lucide:arrow-right" />
+                        </Link>
+                      </div>
+                      <div className="hidden md:flex justify-center">
+                        {slide.image && (
+                          <div className="relative w-full aspect-square max-w-xl bg-zinc-900 rounded-[80px] shadow-2xl overflow-hidden group border-4 transition-all duration-700" style={{ borderColor: slide.accentColor + '40' }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={slide.image} alt={slide.title} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <Link
-                      href="/produtos"
-                      className={`self-start inline-flex items-center gap-3 md:gap-6 bg-zinc-900 border-2 px-6 md:px-12 py-3.5 md:py-6 rounded-2xl font-black uppercase text-sm md:text-lg tracking-widest transition-all hover:scale-105 shadow-[0_0_30px_rgba(0,243,255,0.3)] ${slide.ctaColor}`}
-                    >
-                      {slide.ctaText} <Icon icon={slide.ctaIcon} />
-                    </Link>
                   </div>
-                  <div className="hidden md:flex justify-center">
-                    <div className={`relative w-full aspect-square max-w-xl bg-zinc-900 rounded-[80px] shadow-2xl overflow-hidden group border-4 transition-all duration-700 ${slide.imgBorder}`}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={slide.img} alt={slide.imgAlt} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 brightness-110 saturate-[1.3]" />
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Navigation Dots */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
-            {slides.map((_, idx) => (
+              {/* Navigation Dots */}
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
+                {slidesToUse.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentSlide(idx)}
+                    className="h-2 rounded-full transition-all duration-300 cursor-pointer"
+                    style={{ width: currentSlide === idx ? '32px' : '8px', backgroundColor: currentSlide === idx ? '#00f3ff' : 'rgba(255,255,255,0.3)' }}
+                    aria-label={`Slide ${idx + 1}`}
+                  />
+                ))}
+              </div>
+
+              {/* Arrow controls */}
               <button
-                key={idx}
-                onClick={() => setCurrentSlide(idx)}
-                className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${currentSlide === idx ? 'w-8 bg-[#00f3ff]' : 'w-2 bg-white/30'}`}
-                aria-label={`Slide ${idx + 1}`}
-              />
-            ))}
-          </div>
-
-          {/* Arrow controls */}
-          <button
-            onClick={() => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length)}
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
-            aria-label="Slide anterior"
-          >
-            <Icon icon="lucide:chevron-left" className="text-2xl" />
-          </button>
-          <button
-            onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
-            aria-label="Próximo slide"
-          >
-            <Icon icon="lucide:chevron-right" className="text-2xl" />
-          </button>
+                onClick={() => setCurrentSlide((prev) => (prev - 1 + slidesToUse.length) % slidesToUse.length)}
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
+                aria-label="Slide anterior"
+              >
+                <Icon icon="lucide:chevron-left" className="text-2xl" />
+              </button>
+              <button
+                onClick={() => setCurrentSlide((prev) => (prev + 1) % slidesToUse.length)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
+                aria-label="Próximo slide"
+              >
+                <Icon icon="lucide:chevron-right" className="text-2xl" />
+              </button>
+            </>
+          )}
         </section>
 
         {/* POKEMON COLLECTIONS */}
