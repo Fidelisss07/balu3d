@@ -122,12 +122,12 @@ export default function HomePage() {
               >
                 <div className={`absolute inset-0 ${slide.bgGradientDir} ${slide.bgGradient} pointer-events-none`}></div>
                 <div className="max-w-7xl w-full mx-auto grid md:grid-cols-2 items-center gap-6 md:gap-12 relative z-10">
-                  <div className="flex flex-col justify-center">
+                  <div className="flex flex-col justify-center min-w-0 overflow-hidden">
                     <span
                       className="inline-block self-start px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.3em] mb-4 md:mb-6 rounded-sm"
                       style={{ backgroundColor: slide.badgeBg, boxShadow: `0 0 20px ${slide.badgeColor}99`, color: slide.badgeText === 'text-black' ? '#000' : '#fff' }}
                     >{slide.badge}</span>
-                    <h1 className="text-[clamp(3rem,12vw,9rem)] font-black mb-3 md:mb-8 leading-[0.85] tracking-tighter text-white">
+                    <h1 className="text-[clamp(2.5rem,8vw,7rem)] font-black mb-3 md:mb-8 leading-[0.85] tracking-tighter text-white break-words overflow-hidden">
                       {slide.title}<br />
                       <span className={`text-transparent bg-clip-text bg-gradient-to-r ${slide.subtitleGradient}`}>{slide.subtitle}</span>
                     </h1>
