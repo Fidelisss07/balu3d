@@ -1,15 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Icon } from '@iconify/react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { catalog } from '@/lib/catalog'
-
-const SHIPPING = 15.00
+import { validateCoupon, getSiteConfig } from '@/lib/db'
 
 // Recomendações baseadas no catálogo real
 const recommendations = catalog.slice(0, 4)
@@ -19,15 +18,37 @@ export default function CartPage() {
   const { user } = useAuth()
   const [coupon, setCoupon] = useState('')
   const [couponMsg, setCouponMsg] = useState('')
+  const [appliedDiscount, setAppliedDiscount] = useState(0)
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [freeShippingAbove, setFreeShippingAbove] = useState(0)
+  const [baseShipping, setBaseShipping] = useState(15)
 
-  const grandTotal = total + SHIPPING
+  useEffect(() => {
+    getSiteConfig().then((cfg) => {
+      setFreeShippingAbove(cfg.freeShippingAbove ?? 0)
+      setBaseShipping(cfg.shippingCost ?? 15)
+    }).catch(() => {})
+  }, [])
 
-  function applyCoupon() {
-    if (coupon.toUpperCase() === 'BALU10') {
-      setCouponMsg('Cupom aplicado! -10% (em breve)')
+  const subtotalAfterCoupon = appliedDiscount > 0 ? total * (1 - appliedDiscount / 100) : total
+  const shippingCost = freeShippingAbove > 0 && subtotalAfterCoupon >= freeShippingAbove ? 0 : baseShipping
+  const grandTotal = subtotalAfterCoupon + shippingCost
+  const missingForFreeShipping = freeShippingAbove > 0 ? Math.max(0, freeShippingAbove - subtotalAfterCoupon) : 0
+  const freeShippingPct = freeShippingAbove > 0 ? Math.min(100, Math.round((subtotalAfterCoupon / freeShippingAbove) * 100)) : 0
+
+  async function applyCoupon() {
+    const code = coupon.trim().toUpperCase()
+    if (!code) return
+    setCouponLoading(true)
+    const result = await validateCoupon(code)
+    if (result) {
+      setAppliedDiscount(result.discount)
+      setCouponMsg(`Cupom aplicado! -${result.discount}% de desconto.`)
     } else {
-      setCouponMsg('Cupom inválido.')
+      setAppliedDiscount(0)
+      setCouponMsg('Cupom inválido ou expirado.')
     }
+    setCouponLoading(false)
   }
 
   if (loading) {
@@ -116,14 +137,49 @@ export default function CartPage() {
               <div className="lg:col-span-4">
                 <div className="bg-black border-2 border-zinc-800 rounded-[40px] p-8 sticky top-32 shadow-2xl">
                   <h2 className="text-2xl font-black uppercase tracking-tighter mb-8">Resumo do Pedido</h2>
+
+                  {/* Upsell frete grátis */}
+                  {freeShippingAbove > 0 && missingForFreeShipping > 0 && (
+                    <div className="mb-6 p-4 bg-[#00ff00]/5 border border-[#00ff00]/20 rounded-2xl">
+                      <p className="text-xs font-black text-[#00ff00] uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <Icon icon="lucide:truck" /> Frete Grátis Quase Lá!
+                      </p>
+                      <p className="text-[11px] text-zinc-400 mb-3">
+                        Faltam <span className="text-white font-black">R$ {missingForFreeShipping.toFixed(2).replace('.', ',')}</span> para frete grátis
+                      </p>
+                      <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#00ff00] rounded-full transition-all duration-500"
+                          style={{ width: `${freeShippingPct}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-1 text-right">{freeShippingPct}%</p>
+                    </div>
+                  )}
+                  {freeShippingAbove > 0 && missingForFreeShipping === 0 && (
+                    <div className="mb-6 p-4 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-2xl flex items-center gap-3">
+                      <Icon icon="lucide:package-check" className="text-[#00ff00] text-xl shrink-0" />
+                      <p className="text-xs font-black text-[#00ff00] uppercase tracking-widest">Parabéns! Você ganhou frete grátis!</p>
+                    </div>
+                  )}
+
                   <div className="space-y-4 mb-8">
                     <div className="flex justify-between items-center text-zinc-400 font-medium">
                       <span>Subtotal</span>
                       <span className="text-white">R$ {total.toFixed(2).replace('.', ',')}</span>
                     </div>
+                    {appliedDiscount > 0 && (
+                      <div className="flex justify-between items-center font-medium">
+                        <span className="text-[#00ff00]">Cupom (-{appliedDiscount}%)</span>
+                        <span className="text-[#00ff00]">- R$ {(total * appliedDiscount / 100).toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center text-zinc-400 font-medium">
                       <span>Frete estimado</span>
-                      <span className="text-[#00ff00]">R$ {SHIPPING.toFixed(2).replace('.', ',')}</span>
+                      {shippingCost === 0
+                        ? <span className="text-[#00ff00] font-black">GRÁTIS</span>
+                        : <span>R$ {shippingCost.toFixed(2).replace('.', ',')}</span>
+                      }
                     </div>
                     <div className="h-px bg-zinc-800 w-full my-4" />
                     <div className="flex justify-between items-end">
@@ -150,8 +206,8 @@ export default function CartPage() {
                         onChange={(e) => setCoupon(e.target.value)}
                         className="flex-1 bg-zinc-900 border-2 border-zinc-800 rounded-xl px-4 py-3 text-xs font-black text-white focus:outline-none focus:border-[#ff00ff] transition-all placeholder:text-zinc-700"
                       />
-                      <button onClick={applyCoupon} className="px-4 py-3 border-2 border-zinc-800 rounded-xl text-zinc-500 hover:text-white hover:border-white transition-all cursor-pointer" aria-label="Aplicar cupom">
-                        <Icon icon="lucide:check" />
+                      <button onClick={applyCoupon} disabled={couponLoading} className="px-4 py-3 border-2 border-zinc-800 rounded-xl text-zinc-500 hover:text-white hover:border-white transition-all cursor-pointer disabled:opacity-50" aria-label="Aplicar cupom">
+                        {couponLoading ? <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Icon icon="lucide:check" />}
                       </button>
                     </div>
                     {couponMsg && (

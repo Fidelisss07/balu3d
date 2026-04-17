@@ -8,7 +8,7 @@ import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
-import { createOrder } from '@/lib/db'
+import { createOrder, getSiteConfig, type SiteConfig } from '@/lib/db'
 
 const SHIPPING_OPTIONS = [
   { id: 'pac',       icon: 'lucide:truck',  label: 'PAC',       desc: '8-12 Dias Úteis', price: 0,  priceLabel: 'Grátis',    color: '#00f3ff' },
@@ -55,6 +55,10 @@ export default function CheckoutPage() {
   const [shipping, setShipping] = useState('pac')
   const [payMethod, setPayMethod] = useState<PayMethod>('credito')
   const [submitting, setSubmitting] = useState(false)
+  const [pixGenerated, setPixGenerated] = useState(false)
+  const [pixCode, setPixCode] = useState('')
+  const [pixCopied, setPixCopied] = useState(false)
+  const [siteConfig, setSiteConfig] = useState<SiteConfig | null>(null)
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState('')
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
@@ -65,6 +69,10 @@ export default function CheckoutPage() {
     cep: '', logradouro: '', numero: '', complemento: '', bairro: '', city: '', state: '',
     cardName: '', cardNumber: '', cardExpiry: '', cardCvv: '', installments: '1',
   })
+
+  useEffect(() => {
+    getSiteConfig().then(setSiteConfig).catch(() => {})
+  }, [])
 
   // Pré-preenche nome/email quando user carrega
   useEffect(() => {
@@ -80,6 +88,32 @@ export default function CheckoutPage() {
   const shippingOption = SHIPPING_OPTIONS.find((o) => o.id === shipping)!
   const shippingCost = shippingOption.price
   const orderTotal = total + shippingCost
+  const pixDiscountPct = siteConfig?.pixDiscount ?? 5
+  const pixDiscount = payMethod === 'pix' ? orderTotal * (pixDiscountPct / 100) : 0
+  const finalTotal = orderTotal - pixDiscount
+
+  function generatePixCode(amount: number): string {
+    const pixKey = siteConfig?.storeEmail ?? 'contato@balu3d.com.br'
+    const name = (siteConfig?.storeName ?? 'BALU 3D').toUpperCase().slice(0, 25)
+    const base = `00020126580014BR.GOV.BCB.PIX0136${pixKey}5204000053039865802BR5913${name}6009SAO PAULO62070503***6304`
+    return base + amount.toFixed(2).replace('.', '')
+  }
+
+  function handleGeneratePix() {
+    const code = generatePixCode(finalTotal)
+    setPixCode(code)
+    setPixGenerated(true)
+  }
+
+  async function handleCopyPix() {
+    try {
+      await navigator.clipboard.writeText(pixCode)
+      setPixCopied(true)
+      setTimeout(() => setPixCopied(false), 2000)
+    } catch {
+      // fallback silencioso
+    }
+  }
 
   // CEP lookup
   const handleCEP = useCallback(async (raw: string) => {
@@ -139,6 +173,10 @@ export default function CheckoutPage() {
   const handleSubmit = async () => {
     if (items.length === 0) return
     if (!validate()) return
+    if (payMethod === 'pix' && !pixGenerated) {
+      alert('Por favor, gere o QR Code Pix antes de finalizar o pedido.')
+      return
+    }
     setSubmitting(true)
     try {
       const orderId = await createOrder({
@@ -148,7 +186,7 @@ export default function CheckoutPage() {
         items,
         subtotal: total,
         shipping: shippingCost,
-        total: orderTotal,
+        total: finalTotal,
         shippingMethod: shipping,
         paymentMethod: payMethod,
         address: {
@@ -430,18 +468,80 @@ export default function CheckoutPage() {
                     </>
                   ) : (
                     /* PIX */
-                    <div className="text-center space-y-6 py-4">
-                      <div className="w-40 h-40 mx-auto bg-white rounded-3xl flex items-center justify-center">
-                        <Icon icon="simple-icons:pix" className="text-7xl text-[#32BCAD]" />
+                    <div className="space-y-6 py-2">
+                      {/* Valor com desconto */}
+                      <div className="flex items-center justify-between p-4 bg-[#00ff00]/5 rounded-2xl border border-[#00ff00]/20">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Valor com desconto Pix ({pixDiscountPct}%)</p>
+                          <p className="text-2xl font-black text-[#00ff00] mt-1">R$ {finalTotal.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                        <Icon icon="simple-icons:pix" className="text-4xl text-[#32BCAD]" />
                       </div>
-                      <div>
-                        <p className="text-white font-black uppercase tracking-widest text-sm">Pague com PIX</p>
-                        <p className="text-zinc-500 text-xs mt-2 font-bold uppercase">O QR Code será gerado após confirmar o pedido</p>
-                      </div>
-                      <div className="flex items-center justify-center gap-2 text-[#00ff00]">
-                        <Icon icon="lucide:zap" className="text-sm" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Confirmação instantânea</span>
-                      </div>
+
+                      {!pixGenerated ? (
+                        <button
+                          onClick={handleGeneratePix}
+                          className="w-full py-5 bg-[#32BCAD] hover:bg-[#28a99a] text-white font-black uppercase tracking-widest text-sm rounded-2xl transition-all flex items-center justify-center gap-3 cursor-pointer"
+                        >
+                          <Icon icon="simple-icons:pix" className="text-xl" />
+                          Gerar QR Code Pix
+                        </button>
+                      ) : (
+                        <div className="bg-zinc-900 border border-[#00ff00]/20 rounded-[32px] p-8 text-center space-y-6">
+                          {/* QR Code */}
+                          <div className="mx-auto w-fit bg-white p-3 rounded-2xl">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`}
+                              alt="QR Code Pix"
+                              width={200}
+                              height={200}
+                              className="rounded-xl"
+                            />
+                          </div>
+
+                          {/* Tempo limite */}
+                          <div className="flex items-center justify-center gap-2 text-amber-400">
+                            <Icon icon="lucide:clock" className="text-sm" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Válido por 30 minutos</span>
+                          </div>
+
+                          {/* Código copia-e-cola */}
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pix Copia e Cola</p>
+                            <div className="flex gap-2">
+                              <input
+                                readOnly
+                                value={pixCode}
+                                className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-[10px] text-zinc-400 font-mono outline-none truncate"
+                              />
+                              <button
+                                onClick={handleCopyPix}
+                                className="shrink-0 px-4 py-3 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-xl text-[#00ff00] hover:bg-[#00ff00]/20 transition-all cursor-pointer flex items-center gap-2"
+                              >
+                                <Icon icon={pixCopied ? 'lucide:check' : 'lucide:copy'} className="text-base" />
+                                <span className="text-[10px] font-black uppercase">{pixCopied ? 'Copiado!' : 'Copiar'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Instruções */}
+                          <div className="text-left space-y-2 p-4 bg-black/40 rounded-2xl border border-white/5">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Como pagar:</p>
+                            {['Abra o app do seu banco', 'Vá em Pix → Ler QR Code', 'Escaneie o código acima', 'Confirme o pagamento'].map((step, i) => (
+                              <div key={i} className="flex items-center gap-3">
+                                <div className="w-5 h-5 rounded-full bg-[#00ff00]/20 text-[#00ff00] text-[9px] font-black flex items-center justify-center shrink-0">{i + 1}</div>
+                                <p className="text-[10px] text-zinc-400 font-bold">{step}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center justify-center gap-2 text-[#00ff00]">
+                            <Icon icon="lucide:zap" className="text-sm" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Confirmação instantânea</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -500,9 +600,15 @@ export default function CheckoutPage() {
                         <span>{form.installments}x de R$ {(orderTotal / parseInt(form.installments)).toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
+                    {payMethod === 'pix' && (
+                      <div className="flex justify-between text-xs font-bold uppercase">
+                        <span className="text-[#00ff00]">Desconto Pix ({pixDiscountPct}%)</span>
+                        <span className="text-[#00ff00]">- R$ {pixDiscount.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-end pt-4">
                       <span className="text-xs font-black uppercase text-white">Total</span>
-                      <span className="text-3xl font-black text-white">R$ {orderTotal.toFixed(2).replace('.', ',')}</span>
+                      <span className="text-3xl font-black text-white">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
                     </div>
                   </div>
 

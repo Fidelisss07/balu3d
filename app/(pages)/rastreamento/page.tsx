@@ -6,7 +6,10 @@ import Link from 'next/link'
 import { Icon } from '@iconify/react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
-import { getOrderById, getTrackingEvents } from '@/lib/db'
+import { getOrderById, getTrackingEvents, getOrdersByUser } from '@/lib/db'
+import type { Order as DbOrder } from '@/lib/db'
+
+const WA_URL = `https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP ?? '5511999999999'}`
 import { useAuth } from '@/context/AuthContext'
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
@@ -130,6 +133,19 @@ function RastreamentoInner() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [myOrders, setMyOrders] = useState<DbOrder[]>([])
+  const [myOrdersLoading, setMyOrdersLoading] = useState(false)
+
+  // Carrega pedidos do usuário logado
+  useEffect(() => {
+    if (user) {
+      setMyOrdersLoading(true)
+      getOrdersByUser(user.uid).then((orders) => {
+        setMyOrders(orders)
+        setMyOrdersLoading(false)
+      }).catch(() => setMyOrdersLoading(false))
+    }
+  }, [user])
 
   // Auto-busca quando vem de ?id= (ex: redirect do checkout)
   useEffect(() => {
@@ -141,6 +157,23 @@ function RastreamentoInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  async function fetchCorreiosEvents(code: string): Promise<TrackingEvent[]> {
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${code}`, { signal: AbortSignal.timeout(6000) })
+      if (!res.ok) return []
+      const data = await res.json()
+      // BrasilAPI retorna { eventos: [{ descricao, data, hora, origem }] }
+      const eventos: { descricao?: string; description?: string; data?: string; hora?: string; origem?: { cidade?: string; uf?: string } }[] = data?.eventos ?? data?.objeto?.[0]?.evento ?? []
+      return eventos.map((ev) => ({
+        date: ev.data ? `${ev.data}${ev.hora ? ' ' + ev.hora : ''}` : '—',
+        title: ev.descricao ?? ev.description ?? 'Atualização dos Correios',
+        subtitle: ev.origem?.cidade ? `${ev.origem.cidade}${ev.origem.uf ? ' – ' + ev.origem.uf : ''}` : undefined,
+      }))
+    } catch {
+      return []
+    }
+  }
+
   async function doSearch(query: string) {
     const normalized = query.trim().toUpperCase()
     if (!normalized) return
@@ -150,7 +183,22 @@ function RastreamentoInner() {
     try {
       const firestoreOrder = await getOrderById(normalized)
       if (firestoreOrder) {
-        const events = await getTrackingEvents(normalized)
+        const [manualEvents, correiosEvents] = await Promise.all([
+          getTrackingEvents(normalized),
+          firestoreOrder.trackingCode && isCorreiosCode(firestoreOrder.trackingCode)
+            ? fetchCorreiosEvents(firestoreOrder.trackingCode)
+            : Promise.resolve([]),
+        ])
+
+        // Mescla: eventos dos Correios primeiro (mais recentes), depois os manuais do admin
+        const allEvents: TrackingEvent[] = [
+          ...correiosEvents,
+          ...manualEvents,
+        ]
+        if (allEvents.length === 0) {
+          allEvents.push({ date: 'Pedido criado', title: 'Pedido confirmado e pago', subtitle: 'Aguardando início da impressão' })
+        }
+
         const mapped: Order = {
           id: firestoreOrder.id ?? normalized,
           status: firestoreOrder.status as OrderStatus,
@@ -165,9 +213,7 @@ function RastreamentoInner() {
             detail: `Qtd: ${i.qty} · Resina 8K`,
             color: i.color,
           })),
-          events: events.length > 0 ? events : [
-            { date: 'Pedido criado', title: 'Pedido confirmado e pago', subtitle: 'Aguardando início da impressão' }
-          ],
+          events: allEvents,
         }
         setOrder(mapped)
         setSearched(true)
@@ -266,7 +312,7 @@ function RastreamentoInner() {
                     Não encontramos nenhum pedido com o código <span className="text-white">&ldquo;{input.trim().toUpperCase()}&rdquo;</span>.
                   </p>
                   <a
-                    href="https://wa.me/550000000000"
+                    href={WA_URL}
                     className="inline-flex items-center gap-3 bg-[#25D366] text-white px-6 py-4 rounded-2xl font-black uppercase text-sm hover:scale-105 hover:shadow-[0_0_30px_rgba(37,211,102,0.4)] transition-all"
                   >
                     <Icon icon="logos:whatsapp-icon" className="text-xl" />
@@ -487,7 +533,7 @@ function RastreamentoInner() {
                           Nosso suporte está online para ajudar com qualquer dúvida sobre sua entrega.
                         </p>
                         <a
-                          href="https://wa.me/550000000000"
+                          href={WA_URL}
                           className="w-full flex items-center justify-center gap-3 bg-zinc-900 border-2 border-[#00ff00] text-[#00ff00] py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-[#00ff00] hover:text-black transition-all shadow-[0_0_20px_rgba(0,255,0,0.2)] group cursor-pointer"
                         >
                           <Icon icon="logos:whatsapp-icon" className="text-lg" />
@@ -506,24 +552,97 @@ function RastreamentoInner() {
         {/* ── EMPTY STATE ───────────────────────────────────────────── */}
         {!searched && !loading && (
           <section className="py-12 md:py-20 px-4 md:px-8">
-            <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
-              {[
-                { icon: 'lucide:check-circle', color: '#00ff00', label: 'Confirmado', desc: 'Pagamento aprovado, entrando na fila de impressão.' },
-                { icon: 'lucide:layers', color: '#ff00ff', label: 'Em Impressão', desc: 'Sua figura está sendo impressa em resina 8K.' },
-                { icon: 'lucide:truck', color: '#00f3ff', label: 'Em Trânsito', desc: 'A caminho de você — acompanhe em tempo real.' },
-                { icon: 'lucide:package-check', color: '#00ff00', label: 'Entregue', desc: 'Seu pedido chegou ao destino com sucesso.' },
-              ].map((s) => (
-                <div key={s.label} className="bg-zinc-900/40 border border-white/5 rounded-[24px] md:rounded-[30px] p-5 md:p-6 flex items-start gap-4 md:gap-5">
-                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${s.color}15`, border: `1px solid ${s.color}44` }}>
-                    <Icon icon={s.icon} className="text-xl md:text-2xl" style={{ color: s.color }} />
+            {user ? (
+              /* Usuário logado: mostrar pedidos recentes */
+              <div className="max-w-3xl mx-auto">
+                <h2 className="text-xl font-black uppercase text-white mb-6 flex items-center gap-3">
+                  <Icon icon="lucide:history" className="text-[#00f3ff]" />
+                  Seus Pedidos Recentes
+                </h2>
+                {myOrdersLoading ? (
+                  <div className="space-y-3">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="bg-zinc-900/40 border border-white/5 rounded-[24px] p-5 animate-pulse h-20" />
+                    ))}
                   </div>
-                  <div>
-                    <p className="font-black uppercase text-sm text-white mb-1">{s.label}</p>
-                    <p className="text-xs text-zinc-500 font-bold leading-relaxed">{s.desc}</p>
+                ) : myOrders.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Icon icon="lucide:package" className="text-5xl text-zinc-700 mx-auto mb-4" />
+                    <p className="text-zinc-500 font-bold mb-6">Você ainda não fez pedidos.</p>
+                    <Link
+                      href="/produtos"
+                      className="inline-flex items-center gap-2 bg-[#00f3ff] text-black px-6 py-3 rounded-2xl font-black uppercase text-sm hover:scale-105 transition-all"
+                    >
+                      Ver Produtos
+                      <Icon icon="lucide:arrow-right" />
+                    </Link>
                   </div>
-                </div>
-              ))}
-            </div>
+                ) : (
+                  <div className="space-y-3">
+                    {myOrders.slice(0, 5).map((o) => {
+                      const statusColor: Record<string, string> = { confirmado: '#00ff00', impressao: '#ff00ff', transito: '#00f3ff', entregue: '#00ff00', cancelado: '#ef4444' }
+                      const statusLabel: Record<string, string> = { confirmado: 'Confirmado', impressao: 'Em Impressão', transito: 'Em Trânsito', entregue: 'Entregue', cancelado: 'Cancelado' }
+                      const sc = statusColor[o.status] ?? '#ffffff'
+                      const sl = statusLabel[o.status] ?? o.status
+                      const dateStr = o.createdAt
+                        ? new Date((o.createdAt as { toDate?: () => Date }).toDate?.() ?? o.createdAt as unknown as Date).toLocaleDateString('pt-BR')
+                        : '—'
+                      return (
+                        <button
+                          key={o.id}
+                          onClick={() => { setInput(o.id!); doSearch(o.id!) }}
+                          className="w-full bg-zinc-900/40 border border-white/5 hover:border-white/20 rounded-[24px] p-5 flex items-center justify-between gap-4 text-left transition-all hover:bg-zinc-900/70 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                              style={{ background: `${sc}15`, border: `1px solid ${sc}44` }}
+                            >
+                              <Icon icon="lucide:package" className="text-lg" style={{ color: sc }} />
+                            </div>
+                            <div>
+                              <p className="font-black uppercase text-sm text-white">{o.id}</p>
+                              <p className="text-xs text-zinc-500 font-bold">{dateStr}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 flex-shrink-0">
+                            <span className="text-sm font-black text-white hidden sm:block">
+                              R$ {o.total.toFixed(2).replace('.', ',')}
+                            </span>
+                            <span
+                              className="text-[10px] font-black uppercase px-2 py-1 rounded-lg"
+                              style={{ background: `${sc}20`, color: sc }}
+                            >
+                              {sl}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Não logado: cards informativos */
+              <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                {[
+                  { icon: 'lucide:check-circle', color: '#00ff00', label: 'Confirmado', desc: 'Pagamento aprovado, entrando na fila de impressão.' },
+                  { icon: 'lucide:layers', color: '#ff00ff', label: 'Em Impressão', desc: 'Sua figura está sendo impressa em resina 8K.' },
+                  { icon: 'lucide:truck', color: '#00f3ff', label: 'Em Trânsito', desc: 'A caminho de você — acompanhe em tempo real.' },
+                  { icon: 'lucide:package-check', color: '#00ff00', label: 'Entregue', desc: 'Seu pedido chegou ao destino com sucesso.' },
+                ].map((s) => (
+                  <div key={s.label} className="bg-zinc-900/40 border border-white/5 rounded-[24px] md:rounded-[30px] p-5 md:p-6 flex items-start gap-4 md:gap-5">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${s.color}15`, border: `1px solid ${s.color}44` }}>
+                      <Icon icon={s.icon} className="text-xl md:text-2xl" style={{ color: s.color }} />
+                    </div>
+                    <div>
+                      <p className="font-black uppercase text-sm text-white mb-1">{s.label}</p>
+                      <p className="text-xs text-zinc-500 font-bold leading-relaxed">{s.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
       </main>

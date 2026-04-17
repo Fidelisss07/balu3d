@@ -22,10 +22,28 @@ export function CarouselProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await getCarousel()
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+        const data = await Promise.race([
+          getCarousel(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout carregando carrossel')), 5000)
+          )
+        ]) as Carousel
+
+        clearTimeout(timeoutId)
         setCarousel(data)
       } catch (err) {
         console.error('Erro ao carregar carrossel:', err)
+        // Fallback: usar valores padrão
+        setCarousel({
+          slides: [
+            { id: 0, title: 'CHARIZARD', subtitle: 'UNBOUND', image: '', bgColor: '#1a1a1a', textColor: '#00f3ff', accentColor: '#ff6b35' },
+            { id: 1, title: 'DRAGONITE', subtitle: 'LEGENDARY', image: '', bgColor: '#1a1a1a', textColor: '#00f3ff', accentColor: '#4a90e2' },
+            { id: 2, title: 'MEWTWO', subtitle: 'MYTHICAL', image: '', bgColor: '#1a1a1a', textColor: '#00f3ff', accentColor: '#a855f7' },
+          ],
+        })
       } finally {
         setLoading(false)
       }

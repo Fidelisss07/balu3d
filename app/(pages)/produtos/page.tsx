@@ -7,6 +7,8 @@ import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { getFirestoreProducts } from '@/lib/db'
 
+const WA_URL = `https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP ?? '5511999999999'}`
+
 interface Product {
   id: string
   name: string
@@ -240,7 +242,7 @@ export default function ProdutosPage() {
               Fazemos encomendas personalizadas via WhatsApp. Qualquer figura, qualquer escala.
             </p>
             <a
-              href="https://wa.me/550000000000"
+              href={WA_URL}
               className="inline-flex items-center gap-3 bg-[#25D366] text-white px-8 py-4 rounded-2xl font-black uppercase hover:scale-105 hover:shadow-[0_0_30px_rgba(37,211,102,0.5)] transition-all"
             >
               <Icon icon="logos:whatsapp-icon" className="text-2xl" />

@@ -6,17 +6,21 @@ import Link from 'next/link'
 import { Icon } from '@iconify/react'
 import Navbar from '@/components/Navbar'
 import { useAuth } from '@/context/AuthContext'
+import TabAgenda from '@/components/admin/TabAgenda'
+import TabCriarProduto from '@/components/admin/TabCriarProduto'
 import {
   getAllOrders, getAllUsers, updateOrderStatus, addTrackingEvent,
   setUserRole, getFirestoreProducts, addFirestoreProduct, updateFirestoreProduct,
-  deleteFirestoreProduct, type Order, type TrackingEvent
+  deleteFirestoreProduct, getSiteConfig, updateSiteConfig, getCoupons, upsertCoupon, deleteCoupon,
+  getFaq, updateFaq,
+  getAgendaEvents, upsertAgendaEvent, deleteAgendaEvent,
+  type Order, type TrackingEvent, type SiteConfig, type Coupon, type FaqCategory, type FaqItem, type AgendaEvent
 } from '@/lib/db'
 import { catalog } from '@/lib/catalog'
-import { AdminCarouselEditor } from '@/components/AdminCarouselEditor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AdminTab = 'dashboard' | 'pedidos' | 'kanban' | 'carrosseís' | 'produtos' | 'criar-produto' | 'clientes' | 'relatorio'
+type AdminTab = 'dashboard' | 'pedidos' | 'kanban' | 'produtos' | 'criar-produto' | 'clientes' | 'relatorio' | 'cupons' | 'faq' | 'agenda' | 'configuracoes'
 
 interface FirestoreProduct {
   id: string
@@ -26,11 +30,13 @@ interface FirestoreProduct {
   oldPrice?: number
   category: string
   img: string
+  images?: string[]
   description: string
   stock: number
   height: string
   color: string
   badges: string[]
+  sizes?: string[]
   visible: boolean
 }
 
@@ -81,7 +87,7 @@ function fmtDate(ts: { seconds: number } | string | undefined) {
 }
 
 function waLink(order: Order, message: string) {
-  const phone = '5511999999999' // pode ser configurado futuramente
+  const phone = process.env.NEXT_PUBLIC_WHATSAPP ?? '5511999999999'
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
 }
 
@@ -288,26 +294,36 @@ export default function AdminPage() {
   const [togglingProduct, setTogglingProduct] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<FirestoreProduct | null>(null)
 
-  // Criar produto — form state
-  const emptyForm = { name: '', price: '', oldPrice: '', category: 'Classic', img: '', description: '', stock: '', height: '', color: '#00f3ff', badges: '', visible: true }
-  const [form, setForm] = useState(emptyForm)
-  const [formError, setFormError] = useState('')
-  const [formLoading, setFormLoading] = useState(false)
-  const [formSuccess, setFormSuccess] = useState(false)
-  const [imgFile, setImgFile] = useState<File | null>(null)
-  const [imgPreview, setImgPreview] = useState<string>('')
-  const [uploadProgress, setUploadProgress] = useState<number>(0)
-  const imgInputRef = useRef<HTMLInputElement>(null)
 
-  // Auto-slug from name
-  function toSlug(name: string) {
-    return name
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-')
-  }
+
+  // Configurações
+  const [siteConfig, setSiteConfig] = useState<SiteConfig | null>(null)
+  const [configSaving, setConfigSaving] = useState(false)
+  const [configSaved, setConfigSaved] = useState(false)
+
+  // FAQ
+  const [faqCategories, setFaqCategories] = useState<FaqCategory[]>([])
+  const [faqLoading, setFaqLoading] = useState(false)
+  const [faqSaving, setFaqSaving] = useState(false)
+  const [faqSaved, setFaqSaved] = useState(false)
+
+  // Agenda
+  const [agendaEvents, setAgendaEvents] = useState<AgendaEvent[]>([])
+  const [agendaLoading, setAgendaLoading] = useState(false)
+  const [agendaSaving, setAgendaSaving] = useState(false)
+  const [deletingEvent, setDeletingEvent] = useState<string | null>(null)
+  const emptyEventForm: Omit<AgendaEvent, 'id' | 'createdAt'> = { title: '', date: '', timeStart: '', timeEnd: '', venue: '', address: '', city: '', state: '', description: '', imageUrl: '', mapUrl: '', instagramUrl: '', color: '#ff00ff' }
+  const [eventForm, setEventForm] = useState<Omit<AgendaEvent, 'id' | 'createdAt'>>(emptyEventForm)
+  const [editingEvent, setEditingEvent] = useState<AgendaEvent | null>(null)
+  const [agendaMsg, setAgendaMsg] = useState('')
+
+  // Cupons
+  const [coupons, setCoupons] = useState<Coupon[]>([])
+  const [couponsLoading, setCouponsLoading] = useState(false)
+  const [couponForm, setCouponForm] = useState({ code: '', discount: '', active: true, expiresAt: '', usageLimit: '' })
+  const [couponSaving, setCouponSaving] = useState(false)
+  const [couponMsg, setCouponMsg] = useState('')
+  const [deletingCoupon, setDeletingCoupon] = useState<string | null>(null)
 
   // Relatório
   const [relPeriod, setRelPeriod] = useState<7 | 30 | 90>(30)
@@ -328,10 +344,11 @@ export default function AdminPage() {
     async function load() {
       setDataLoading(true)
       setFsLoading(true)
-      const [ordersData, usersData, productsData] = await Promise.all([getAllOrders(), getAllUsers(), getFirestoreProducts()])
+      const [ordersData, usersData, productsData, configData] = await Promise.all([getAllOrders(), getAllUsers(), getFirestoreProducts(), getSiteConfig()])
       setOrders(ordersData)
       setUsers(usersData)
       setFsProducts(productsData as FirestoreProduct[])
+      setSiteConfig(configData)
       setDataLoading(false)
       setFsLoading(false)
     }
@@ -340,6 +357,7 @@ export default function AdminPage() {
 
   // ── Handlers
   async function handleStatusChange(orderId: string, status: Order['status']) {
+    if (status === 'cancelado' && !confirm('Cancelar este pedido? Esta ação não pode ser desfeita.')) return
     setUpdatingOrder(orderId)
     await updateOrderStatus(orderId, status)
     setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status } : o))
@@ -377,9 +395,16 @@ export default function AdminPage() {
     setTogglingProduct(product.id)
     await updateFirestoreProduct(product.id, {
       name: product.name,
+      slug: product.slug,
       price: product.price,
       oldPrice: product.oldPrice ?? null,
+      category: product.category,
+      description: product.description,
       stock: product.stock,
+      height: product.height,
+      color: product.color,
+      badges: product.badges,
+      sizes: product.sizes ?? [],
       visible: product.visible,
     })
     setFsProducts((prev) => prev.map((p) => p.id === product.id ? product : p))
@@ -387,72 +412,148 @@ export default function AdminPage() {
     setTogglingProduct(null)
   }
 
-  async function handleCreateProduct() {
-    setFormError('')
-    const slug = toSlug(form.name)
-    if (!form.name || !form.price || !form.stock) {
-      setFormError('Preencha: nome, preço e stock.')
-      return
-    }
-    if (!imgFile) {
-      setFormError('Selecione uma imagem para o produto.')
-      return
-    }
-    setFormLoading(true)
-    try {
-      // Upload to Cloudinary
-      const formData = new FormData()
-      formData.append('file', imgFile)
-      formData.append('upload_preset', 'products')
-      formData.append('folder', 'balu3d')
+  // ── Config handler
+  async function handleSaveConfig() {
+    if (!siteConfig) return
+    setConfigSaving(true)
+    await updateSiteConfig(siteConfig)
+    setConfigSaving(false)
+    setConfigSaved(true)
+    setTimeout(() => setConfigSaved(false), 3000)
+  }
 
-      const xhr = new XMLHttpRequest()
-      const imgUrl = await new Promise<string>((resolve, reject) => {
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setUploadProgress(Math.round(e.loaded / e.total * 100))
-        }
-        xhr.onload = () => {
-          if (xhr.status === 200) {
-            const data = JSON.parse(xhr.responseText)
-            resolve(data.secure_url)
-          } else {
-            reject(new Error(xhr.responseText))
-          }
-        }
-        xhr.onerror = () => reject(new Error('Falha na conexão com Cloudinary'))
-        xhr.open('POST', 'https://api.cloudinary.com/v1_1/dxm2uwhh0/image/upload')
-        xhr.send(formData)
+  // ── Handlers de FAQ
+  async function loadFaq() {
+    setFaqLoading(true)
+    const data = await getFaq()
+    setFaqCategories(data)
+    setFaqLoading(false)
+  }
+
+  async function handleSaveFaq() {
+    setFaqSaving(true)
+    await updateFaq(faqCategories)
+    setFaqSaving(false)
+    setFaqSaved(true)
+    setTimeout(() => setFaqSaved(false), 3000)
+  }
+
+  function faqAddQuestion(catIdx: number) {
+    setFaqCategories((prev) => {
+      const next = [...prev]
+      next[catIdx] = { ...next[catIdx], faqs: [...next[catIdx].faqs, { q: '', a: '' }] }
+      return next
+    })
+  }
+
+  function faqRemoveQuestion(catIdx: number, qIdx: number) {
+    setFaqCategories((prev) => {
+      const next = [...prev]
+      next[catIdx] = { ...next[catIdx], faqs: next[catIdx].faqs.filter((_, i) => i !== qIdx) }
+      return next
+    })
+  }
+
+  function faqUpdateQuestion(catIdx: number, qIdx: number, field: keyof FaqItem, value: string) {
+    setFaqCategories((prev) => {
+      const next = [...prev]
+      const faqs = [...next[catIdx].faqs]
+      faqs[qIdx] = { ...faqs[qIdx], [field]: value }
+      next[catIdx] = { ...next[catIdx], faqs }
+      return next
+    })
+  }
+
+  // ── Handlers de agenda
+  async function loadAgendaEvents() {
+    setAgendaLoading(true)
+    let data = await getAgendaEvents()
+    if (data.length === 0) {
+      // Seed com evento de exemplo
+      await upsertAgendaEvent({
+        title: 'Feira Nerd — Shopping Boulevard',
+        date: '2026-05-10',
+        timeStart: '10:00',
+        timeEnd: '20:00',
+        venue: 'Shopping Boulevard',
+        address: 'Av. Gov. José Malcher, 3300 — Belém',
+        city: 'Belém',
+        state: 'PA',
+        description: 'Venha nos visitar no estande da Balu 3D! Figuras exclusivas, impressão ao vivo e edições limitadas só no evento.',
+        mapUrl: 'https://maps.google.com/?q=Shopping+Boulevard+Belém',
+        instagramUrl: 'https://instagram.com/balu3d',
+        color: '#ff00ff',
       })
-
-      const newProduct = {
-        name: form.name.trim(),
-        slug,
-        price: parseFloat(form.price),
-        oldPrice: form.oldPrice ? parseFloat(form.oldPrice) : null,
-        category: form.category,
-        img: imgUrl,
-        description: form.description.trim(),
-        stock: parseInt(form.stock),
-        height: form.height.trim(),
-        color: form.color,
-        badges: form.badges.split(',').map((b) => b.trim()).filter(Boolean),
-        visible: form.visible,
-      }
-      const id = await addFirestoreProduct(newProduct)
-      setFsProducts((prev) => [...prev, { id, ...newProduct } as FirestoreProduct])
-      setForm(emptyForm)
-      setImgFile(null)
-      setImgPreview('')
-      setUploadProgress(0)
-      setFormSuccess(true)
-      setTimeout(() => setFormSuccess(false), 3000)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setFormError(`Erro ao criar produto: ${msg}`)
-    } finally {
-      setFormLoading(false)
-      setUploadProgress(0)
+      data = await getAgendaEvents()
     }
+    setAgendaEvents(data)
+    setAgendaLoading(false)
+  }
+
+  async function handleSaveEvent() {
+    const form = editingEvent ?? eventForm
+    if (!form.title || !form.date || !form.timeStart || !form.venue || !form.city) {
+      setAgendaMsg('Preencha: título, data, horário, local e cidade.')
+      return
+    }
+    setAgendaSaving(true)
+    if (editingEvent) {
+      await upsertAgendaEvent(editingEvent)
+      setEditingEvent(null)
+    } else {
+      await upsertAgendaEvent(eventForm as AgendaEvent)
+      setEventForm(emptyEventForm)
+    }
+    setAgendaMsg('Evento salvo!')
+    await loadAgendaEvents()
+    setAgendaSaving(false)
+    setTimeout(() => setAgendaMsg(''), 3000)
+  }
+
+  async function handleDeleteEvent(id: string) {
+    if (!confirm('Deletar este evento? Esta ação não pode ser desfeita.')) return
+    setDeletingEvent(id)
+    await deleteAgendaEvent(id)
+    setAgendaEvents((prev) => prev.filter((e) => e.id !== id))
+    setDeletingEvent(null)
+  }
+
+  // ── Handlers de cupom
+  async function loadCoupons() {
+    setCouponsLoading(true)
+    const data = await getCoupons()
+    setCoupons(data)
+    setCouponsLoading(false)
+  }
+
+  async function handleSaveCoupon() {
+    const code = couponForm.code.trim().toUpperCase()
+    const discount = Number(couponForm.discount)
+    if (!code || !discount || discount <= 0 || discount > 100) {
+      setCouponMsg('Preencha código e desconto válido (1-100%).')
+      return
+    }
+    setCouponSaving(true)
+    await upsertCoupon({
+      code,
+      discount,
+      active: couponForm.active,
+      expiresAt: couponForm.expiresAt || undefined,
+      usageLimit: couponForm.usageLimit ? Number(couponForm.usageLimit) : undefined,
+    })
+    setCouponForm({ code: '', discount: '', active: true, expiresAt: '', usageLimit: '' })
+    setCouponMsg(`Cupom ${code} salvo!`)
+    await loadCoupons()
+    setCouponSaving(false)
+    setTimeout(() => setCouponMsg(''), 3000)
+  }
+
+  async function handleDeleteCoupon(code: string) {
+    if (!confirm(`Deletar cupom ${code}? Esta ação não pode ser desfeita.`)) return
+    setDeletingCoupon(code)
+    await deleteCoupon(code)
+    setCoupons((prev) => prev.filter((c) => c.code !== code))
+    setDeletingCoupon(null)
   }
 
   // ── Kanban drag handlers
@@ -470,14 +571,44 @@ export default function AdminPage() {
   }
 
   // ── Guards
-  if (authLoading || !profile) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
         <div className="w-10 h-10 border-2 border-[#00f3ff] border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
-  if (profile.role !== 'admin') return null
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+        <div className="text-center space-y-4">
+          <p className="text-zinc-400 font-black uppercase tracking-widest text-sm">Acesso restrito</p>
+          <p className="text-zinc-600 text-xs">Faça login para continuar.</p>
+          <a href="/login" className="inline-block px-6 py-3 bg-[#00f3ff] text-black font-black uppercase rounded-2xl text-xs hover:bg-[#00d4e0] transition-all">
+            Ir para Login
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  if (!profile || profile.role !== 'admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto">
+            <span className="text-2xl">🔒</span>
+          </div>
+          <p className="text-red-400 font-black uppercase tracking-widest text-sm">Acesso Negado</p>
+          <p className="text-zinc-600 text-xs">Você não tem permissão de administrador.</p>
+          <a href="/" className="inline-block px-6 py-3 bg-zinc-800 text-white font-black uppercase rounded-2xl text-xs hover:bg-zinc-700 transition-all">
+            Voltar ao Início
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   // ── Stats
   const totalRevenue = orders.filter(o => o.status !== 'cancelado').reduce((s, o) => s + o.total, 0)
@@ -548,12 +679,23 @@ export default function AdminPage() {
     { id: 'dashboard', icon: 'lucide:layout-dashboard', label: 'Dashboard' },
     { id: 'pedidos', icon: 'lucide:shopping-cart', label: 'Pedidos' },
     { id: 'kanban', icon: 'lucide:kanban', label: 'Fila Kanban' },
-    { id: 'carrosseís', icon: 'lucide:image', label: 'Carrosséis' },
     { id: 'relatorio', icon: 'lucide:bar-chart-2', label: 'Relatório' },
     { id: 'produtos', icon: 'lucide:box', label: 'Produtos' },
     { id: 'criar-produto', icon: 'lucide:plus-circle', label: 'Criar Produto' },
     { id: 'clientes', icon: 'lucide:users', label: 'Clientes' },
+    { id: 'cupons', icon: 'lucide:ticket', label: 'Cupons' },
+    { id: 'faq', icon: 'lucide:help-circle', label: 'FAQ' },
+    { id: 'agenda', icon: 'lucide:calendar', label: 'Agenda' },
+    { id: 'configuracoes', icon: 'lucide:settings', label: 'Configurações' },
   ]
+
+  // Carrega cupons ao entrar na aba
+  useEffect(() => {
+    if (tab === 'cupons' && coupons.length === 0) loadCoupons()
+    if (tab === 'faq' && faqCategories.length === 0) loadFaq()
+    if (tab === 'agenda' && agendaEvents.length === 0) loadAgendaEvents()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0a0a] bg-grid-dark">
@@ -702,6 +844,57 @@ export default function AdminPage() {
                     </div>
                   </button>
                 </div>
+
+                {/* Gráfico vendas por dia — últimos 14 dias */}
+                {(() => {
+                  const today = new Date()
+                  const days = Array.from({ length: 14 }, (_, i) => {
+                    const d = new Date(today)
+                    d.setDate(today.getDate() - (13 - i))
+                    return d
+                  })
+                  const dayData = days.map((d) => {
+                    const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                    const revenue = orders
+                      .filter((o) => {
+                        if (!o.createdAt) return false
+                        const od = new Date((o.createdAt as { seconds: number }).seconds * 1000)
+                        return od.toDateString() === d.toDateString() && o.status !== 'cancelado'
+                      })
+                      .reduce((s, o) => s + o.total, 0)
+                    return { label, revenue }
+                  })
+                  const maxRev = Math.max(...dayData.map((d) => d.revenue), 1)
+                  return (
+                    <div className="bg-black border border-zinc-800 rounded-[32px] p-8 mb-8">
+                      <h2 className="text-xl font-black uppercase text-white mb-6">Receita — últimos 14 dias</h2>
+                      <div className="flex items-end gap-1.5 h-36 w-full">
+                        {dayData.map((d, i) => {
+                          const pct = d.revenue / maxRev
+                          const isToday = i === 13
+                          return (
+                            <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                              {d.revenue > 0 && (
+                                <div className="absolute bottom-full mb-2 bg-zinc-800 border border-white/10 rounded-lg px-2 py-1 text-[9px] font-black text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                                  {fmt(d.revenue)}
+                                </div>
+                              )}
+                              <div
+                                className="w-full rounded-t-lg transition-all duration-500"
+                                style={{
+                                  height: `${Math.max(pct * 112, d.revenue > 0 ? 4 : 0)}px`,
+                                  background: isToday ? '#00f3ff' : '#00ff00',
+                                  opacity: d.revenue > 0 ? 1 : 0.15,
+                                }}
+                              />
+                              <span className="text-[8px] text-zinc-600 font-bold hidden sm:block">{d.label}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Últimos pedidos */}
                 <div className="bg-black border border-zinc-800 rounded-[32px] p-8">
@@ -879,11 +1072,6 @@ export default function AdminPage() {
               </>
             )}
 
-            {/* ── CARROSSÉIS ─────────────────────────────────────────── */}
-            {tab === 'carrosseís' && (
-              <AdminCarouselEditor />
-            )}
-
             {/* ── RELATÓRIO ──────────────────────────────────────────── */}
             {tab === 'relatorio' && (
               <>
@@ -999,31 +1187,91 @@ export default function AdminPage() {
                 {/* Modal de edição inline */}
                 {editingProduct && (
                   <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="bg-[#0d0d0d] border border-zinc-800 rounded-[32px] w-full max-w-md p-8 shadow-2xl">
-                      <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-black text-white uppercase">Editar Produto</h2>
+                    <div className="bg-[#0d0d0d] border border-zinc-800 rounded-[32px] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-8 pt-8 pb-6 border-b border-zinc-800">
+                        <h2 className="text-xl font-black text-white uppercase tracking-tight">Editar Produto</h2>
                         <button onClick={() => setEditingProduct(null)} className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 cursor-pointer"><Icon icon="lucide:x" /></button>
                       </div>
-                      <div className="space-y-4">
+
+                      {/* Fields */}
+                      <div className="px-8 py-6 space-y-4">
+                        {/* Nome */}
                         <div>
                           <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Nome</label>
-                          <input value={editingProduct.name} onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })} className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff]" />
+                          <input value={editingProduct.name} onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" />
                         </div>
+
+                        {/* Slug (readonly) */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Slug (gerado automaticamente)</label>
+                          <input value={editingProduct.slug} readOnly className="w-full bg-zinc-900/50 border border-white/5 rounded-xl px-4 py-3 text-sm text-zinc-500 cursor-not-allowed focus:outline-none" />
+                        </div>
+
+                        {/* Preço + Preço Antigo */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Preço (R$)</label>
-                            <input type="number" value={editingProduct.price} onChange={(e) => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })} className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff]" />
+                            <input type="number" value={editingProduct.price} onChange={(e) => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" />
                           </div>
                           <div>
                             <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Preço Antigo</label>
-                            <input type="number" value={editingProduct.oldPrice ?? ''} onChange={(e) => setEditingProduct({ ...editingProduct, oldPrice: e.target.value ? parseFloat(e.target.value) : undefined })} className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff]" placeholder="Opcional" />
+                            <input type="number" value={editingProduct.oldPrice ?? ''} onChange={(e) => setEditingProduct({ ...editingProduct, oldPrice: e.target.value ? parseFloat(e.target.value) : undefined })} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" placeholder="Opcional" />
                           </div>
                         </div>
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Stock</label>
-                          <input type="number" value={editingProduct.stock} onChange={(e) => setEditingProduct({ ...editingProduct, stock: parseInt(e.target.value) || 0 })} className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff]" />
+
+                        {/* Categoria + Stock */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Categoria</label>
+                            <select value={editingProduct.category} onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]">
+                              <option value="Classic">Classic</option>
+                              <option value="Legendary">Legendary</option>
+                              <option value="Shiny">Shiny</option>
+                              <option value="Limited">Limited</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Stock</label>
+                            <input type="number" value={editingProduct.stock} onChange={(e) => setEditingProduct({ ...editingProduct, stock: parseInt(e.target.value) || 0 })} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 pt-2">
+
+                        {/* Altura + Cor Neon */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Altura (ex: 22cm)</label>
+                            <input value={editingProduct.height} onChange={(e) => setEditingProduct({ ...editingProduct, height: e.target.value })} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" placeholder="ex: 22cm" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Cor Neon</label>
+                            <div className="flex items-center gap-2">
+                              <input type="color" value={editingProduct.color} onChange={(e) => setEditingProduct({ ...editingProduct, color: e.target.value })} className="w-12 h-12 rounded-xl border border-white/10 bg-zinc-900 cursor-pointer p-1" />
+                              <span className="text-xs text-zinc-400 font-mono">{editingProduct.color}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Badges */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Badges (separadas por vírgula)</label>
+                          <input value={editingProduct.badges.join(', ')} onChange={(e) => setEditingProduct({ ...editingProduct, badges: e.target.value.split(',').map((b) => b.trim()).filter(Boolean) })} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" placeholder="ex: Novo, Popular, Limitado" />
+                        </div>
+
+                        {/* Tamanhos */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Tamanhos (separados por vírgula)</label>
+                          <input value={(editingProduct.sizes ?? []).join(', ')} onChange={(e) => setEditingProduct({ ...editingProduct, sizes: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" placeholder="ex: P, M, G, GG" />
+                        </div>
+
+                        {/* Descrição */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-1">Descrição</label>
+                          <textarea value={editingProduct.description} onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })} rows={4} className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff] resize-none" />
+                        </div>
+
+                        {/* Visível */}
+                        <div className="flex items-center gap-3 pt-1">
                           <button
                             onClick={() => setEditingProduct({ ...editingProduct, visible: !editingProduct.visible })}
                             className={`w-10 h-6 rounded-full transition-all relative cursor-pointer ${editingProduct.visible ? 'bg-[#00f3ff]' : 'bg-zinc-700'}`}
@@ -1033,14 +1281,16 @@ export default function AdminPage() {
                           <span className="text-xs font-bold text-zinc-400">Visível na loja</span>
                         </div>
                       </div>
-                      <div className="flex gap-3 mt-6">
+
+                      {/* Footer */}
+                      <div className="flex gap-3 px-8 pb-8">
                         <button onClick={() => setEditingProduct(null)} className="flex-1 py-3 border border-zinc-700 rounded-xl text-xs font-black text-zinc-400 hover:text-white hover:border-zinc-500 transition-all cursor-pointer">Cancelar</button>
                         <button
                           onClick={() => handleEditSave(editingProduct)}
                           disabled={togglingProduct === editingProduct.id}
                           className="flex-1 py-3 bg-[#00f3ff] text-black text-xs font-black uppercase rounded-xl hover:bg-[#00d4e0] transition-all disabled:opacity-50 cursor-pointer"
                         >
-                          {togglingProduct === editingProduct.id ? 'Salvando...' : 'Salvar'}
+                          {togglingProduct === editingProduct.id ? 'Salvando...' : 'Salvar Alterações'}
                         </button>
                       </div>
                     </div>
@@ -1148,229 +1398,9 @@ export default function AdminPage() {
 
             {/* ── CRIAR PRODUTO ──────────────────────────────────────── */}
             {tab === 'criar-produto' && (
-              <>
-                <div className="mb-8">
-                  <h1 className="text-4xl font-black uppercase tracking-tighter text-white">Criar <span className="text-[#00f3ff]">Produto</span></h1>
-                  <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest mt-1">Novo produto adicionado ao Firestore</p>
-                </div>
-
-                <div className="max-w-2xl">
-                  <div className="bg-black border border-zinc-800 rounded-[32px] p-8 space-y-6">
-
-                    {formSuccess && (
-                      <div className="flex items-center gap-3 p-4 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-2xl">
-                        <Icon icon="lucide:check-circle" className="text-[#00ff00] text-xl flex-shrink-0" />
-                        <p className="text-sm font-black text-[#00ff00]">Produto criado com sucesso!</p>
-                      </div>
-                    )}
-
-                    {formError && (
-                      <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl">
-                        <Icon icon="lucide:alert-circle" className="text-red-400 text-xl flex-shrink-0" />
-                        <p className="text-sm font-black text-red-400">{formError}</p>
-                      </div>
-                    )}
-
-                    {/* Nome (slug auto) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Nome *</label>
-                        <input
-                          value={form.name}
-                          onChange={(e) => setForm({ ...form, name: e.target.value })}
-                          placeholder="Ex: Kratos God of War"
-                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Slug (gerado automaticamente)</label>
-                        <div className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-3 text-sm font-bold text-zinc-500 select-none">
-                          {form.name ? toSlug(form.name) : <span className="text-zinc-700">kratos-god-of-war</span>}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Preços */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Preço (R$) *</label>
-                        <input
-                          type="number"
-                          value={form.price}
-                          onChange={(e) => setForm({ ...form, price: e.target.value })}
-                          placeholder="Ex: 89.90"
-                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Preço Antigo (Opcional)</label>
-                        <input
-                          type="number"
-                          value={form.oldPrice}
-                          onChange={(e) => setForm({ ...form, oldPrice: e.target.value })}
-                          placeholder="Ex: 120.00"
-                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Categoria + Stock + Altura */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Categoria</label>
-                        <select
-                          value={form.category}
-                          onChange={(e) => setForm({ ...form, category: e.target.value })}
-                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff] cursor-pointer"
-                        >
-                          {['Classic', 'Legendary', 'Shiny', 'Limited'].map((c) => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Stock *</label>
-                        <input
-                          type="number"
-                          value={form.stock}
-                          onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                          placeholder="Ex: 10"
-                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Altura</label>
-                        <input
-                          value={form.height}
-                          onChange={(e) => setForm({ ...form, height: e.target.value })}
-                          placeholder="Ex: 22cm"
-                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Cor + Badges */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Cor Neon</label>
-                        <div className="flex gap-3">
-                          <input
-                            type="color"
-                            value={form.color}
-                            onChange={(e) => setForm({ ...form, color: e.target.value })}
-                            className="w-12 h-12 rounded-xl border border-white/10 bg-zinc-900 cursor-pointer"
-                          />
-                          <input
-                            value={form.color}
-                            onChange={(e) => setForm({ ...form, color: e.target.value })}
-                            className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff]"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Badges (separadas por vírgula)</label>
-                        <input
-                          value={form.badges}
-                          onChange={(e) => setForm({ ...form, badges: e.target.value })}
-                          placeholder="Ex: Classic, Best Seller"
-                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Upload de imagem */}
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Imagem do Produto *</label>
-                      <input
-                        ref={imgInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (!file) return
-                          setImgFile(file)
-                          setImgPreview(URL.createObjectURL(file))
-                        }}
-                      />
-                      {imgPreview ? (
-                        <div className="flex items-center gap-4">
-                          <div className="w-24 h-24 rounded-xl overflow-hidden border border-white/10 flex-shrink-0">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={imgPreview} alt="preview" className="w-full h-full object-cover" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-xs font-bold text-zinc-400 mb-1 truncate">{imgFile?.name}</p>
-                            <p className="text-[10px] text-zinc-600 mb-3">{imgFile ? `${(imgFile.size / 1024).toFixed(0)} KB` : ''}</p>
-                            {uploadProgress > 0 && uploadProgress < 100 && (
-                              <div className="w-full bg-zinc-800 rounded-full h-1 mb-3">
-                                <div className="bg-[#00f3ff] h-1 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
-                              </div>
-                            )}
-                            <button
-                              onClick={() => { setImgFile(null); setImgPreview(''); if (imgInputRef.current) imgInputRef.current.value = '' }}
-                              className="text-[10px] font-black uppercase text-red-400 hover:text-red-300 transition-colors cursor-pointer"
-                            >
-                              Remover
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => imgInputRef.current?.click()}
-                          className="w-full border-2 border-dashed border-zinc-700 hover:border-[#00f3ff]/50 rounded-xl p-8 text-center transition-all cursor-pointer group"
-                        >
-                          <Icon icon="lucide:image-plus" className="text-3xl text-zinc-600 group-hover:text-[#00f3ff] mx-auto mb-2 transition-colors" />
-                          <p className="text-xs font-black uppercase text-zinc-600 group-hover:text-[#00f3ff] transition-colors">Clique para selecionar imagem</p>
-                          <p className="text-[10px] text-zinc-700 mt-1">PNG, JPG, WebP — max 5MB</p>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Descrição */}
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">Descrição</label>
-                      <textarea
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        placeholder="Descreva o produto..."
-                        rows={3}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600 resize-none"
-                      />
-                    </div>
-
-                    {/* Visível */}
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setForm({ ...form, visible: !form.visible })}
-                        className={`w-10 h-6 rounded-full transition-all relative cursor-pointer ${form.visible ? 'bg-[#00f3ff]' : 'bg-zinc-700'}`}
-                      >
-                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${form.visible ? 'left-5' : 'left-1'}`} />
-                      </button>
-                      <span className="text-sm font-bold text-zinc-400">Visível na loja imediatamente</span>
-                    </div>
-
-                    {/* Botões */}
-                    <div className="flex gap-4 pt-2">
-                      <button
-                        onClick={() => { setForm(emptyForm); setImgFile(null); setImgPreview(''); setUploadProgress(0); if (imgInputRef.current) imgInputRef.current.value = '' }}
-                        className="flex-1 py-4 border border-zinc-700 rounded-2xl text-xs font-black text-zinc-400 hover:text-white hover:border-zinc-500 transition-all cursor-pointer uppercase"
-                      >
-                        Limpar
-                      </button>
-                      <button
-                        onClick={handleCreateProduct}
-                        disabled={formLoading}
-                        className="flex-1 py-4 bg-[#00f3ff] text-black text-xs font-black uppercase rounded-2xl hover:bg-[#00d4e0] transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        {formLoading ? (
-                          <><div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> Criando...</>
-                        ) : (
-                          <><Icon icon="lucide:plus" /> Criar Produto</>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
+              <TabCriarProduto
+                onProductCreated={(product) => setFsProducts((prev) => [...prev, product])}
+              />
             )}
 
             {/* ── CLIENTES ───────────────────────────────────────────── */}
@@ -1442,6 +1472,352 @@ export default function AdminPage() {
                   </div>
                 )}
               </>
+            )}
+
+            {/* ── FAQ ───────────────────────────────────────────────── */}
+            {tab === 'faq' && (
+              <div>
+                <div className="mb-10 flex items-end justify-between">
+                  <div>
+                    <h1 className="text-4xl font-black uppercase tracking-tighter text-white">
+                      FAQ <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00f3ff] to-[#ff00ff]">Editável</span>
+                    </h1>
+                    <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest mt-1">Edite as perguntas e respostas da página de Ajuda</p>
+                  </div>
+                  <button onClick={handleSaveFaq} disabled={faqSaving}
+                    className="px-6 py-3 bg-[#00f3ff] text-black font-black uppercase rounded-2xl hover:bg-[#00d4e0] transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2">
+                    {faqSaving ? <><div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> Salvando...</>
+                      : faqSaved ? <><Icon icon="lucide:check" /> Salvo!</>
+                      : <><Icon icon="lucide:save" /> Salvar FAQ</>}
+                  </button>
+                </div>
+
+                {faqLoading ? (
+                  <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-[#00f3ff] border-t-transparent rounded-full animate-spin" /></div>
+                ) : (
+                  <div className="space-y-8 max-w-4xl">
+                    {faqCategories.map((cat, catIdx) => (
+                      <div key={catIdx} className="bg-black border border-zinc-800 rounded-[24px] p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `${cat.color}20`, border: `1px solid ${cat.color}40` }}>
+                            <Icon icon={cat.icon} style={{ color: cat.color }} />
+                          </div>
+                          <h3 className="text-sm font-black uppercase text-white tracking-widest">{cat.title}</h3>
+                        </div>
+                        <div className="space-y-4">
+                          {cat.faqs.map((faq, qIdx) => (
+                            <div key={qIdx} className="bg-zinc-900 rounded-2xl p-4 border border-white/5 space-y-2">
+                              <div className="flex items-start gap-2">
+                                <div className="flex-1 space-y-2">
+                                  <input
+                                    value={faq.q}
+                                    onChange={(e) => faqUpdateQuestion(catIdx, qIdx, 'q', e.target.value)}
+                                    placeholder="Pergunta..."
+                                    className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600"
+                                  />
+                                  <textarea
+                                    value={faq.a}
+                                    onChange={(e) => faqUpdateQuestion(catIdx, qIdx, 'a', e.target.value)}
+                                    placeholder="Resposta..."
+                                    rows={2}
+                                    className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600 resize-none"
+                                  />
+                                </div>
+                                <button
+                                  onClick={() => faqRemoveQuestion(catIdx, qIdx)}
+                                  className="mt-1 p-2 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
+                                >
+                                  <Icon icon="lucide:trash-2" className="text-sm" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => faqAddQuestion(catIdx)}
+                            className="w-full py-2.5 border border-dashed border-zinc-700 rounded-2xl text-xs font-black uppercase text-zinc-500 hover:border-[#00f3ff] hover:text-[#00f3ff] transition-all cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <Icon icon="lucide:plus" /> Adicionar Pergunta
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── CUPONS ────────────────────────────────────────────── */}
+            {tab === 'cupons' && (
+              <div>
+                <div className="mb-10">
+                  <h1 className="text-4xl font-black uppercase tracking-tighter text-white">
+                    Cupons <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00f3ff] to-[#ff00ff]">de Desconto</span>
+                  </h1>
+                  <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest mt-1">Crie e gerencie cupons para os clientes</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl">
+                  {/* Criar cupom */}
+                  <div className="bg-black border border-zinc-800 rounded-[24px] p-6 space-y-4">
+                    <h3 className="text-sm font-black uppercase text-[#00f3ff] tracking-widest flex items-center gap-2">
+                      <Icon icon="lucide:plus-circle" /> Criar / Editar Cupom
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Código (ex: BALU10)</label>
+                        <input
+                          value={couponForm.code}
+                          onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm font-black text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600 uppercase"
+                          placeholder="BALU10"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Desconto (%)</label>
+                        <input
+                          type="number" min="1" max="100"
+                          value={couponForm.discount}
+                          onChange={(e) => setCouponForm({ ...couponForm, discount: e.target.value })}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]"
+                          placeholder="10"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Limite de usos (opcional)</label>
+                        <input
+                          type="number" min="1"
+                          value={couponForm.usageLimit}
+                          onChange={(e) => setCouponForm({ ...couponForm, usageLimit: e.target.value })}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]"
+                          placeholder="Ex: 100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Válido até (opcional)</label>
+                        <input
+                          type="date"
+                          value={couponForm.expiresAt}
+                          onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]"
+                        />
+                      </div>
+                      <label className="flex items-center justify-between cursor-pointer pt-1">
+                        <span className="text-sm font-black text-white">Ativo</span>
+                        <div
+                          onClick={() => setCouponForm({ ...couponForm, active: !couponForm.active })}
+                          className={`relative w-12 h-6 rounded-full transition-all cursor-pointer ${couponForm.active ? 'bg-[#00f3ff]' : 'bg-zinc-700'}`}
+                        >
+                          <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${couponForm.active ? 'left-7' : 'left-1'}`} />
+                        </div>
+                      </label>
+                    </div>
+                    {couponMsg && (
+                      <p className={`text-xs font-black ${couponMsg.includes('salvo') ? 'text-[#00ff00]' : 'text-red-400'}`}>{couponMsg}</p>
+                    )}
+                    <button
+                      onClick={handleSaveCoupon}
+                      disabled={couponSaving}
+                      className="w-full py-3 bg-[#00f3ff] text-black font-black uppercase rounded-xl hover:bg-[#00d4e0] transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {couponSaving ? <><div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> Salvando...</> : <><Icon icon="lucide:save" /> Salvar Cupom</>}
+                    </button>
+                  </div>
+
+                  {/* Lista de cupons */}
+                  <div className="bg-black border border-zinc-800 rounded-[24px] p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-black uppercase text-[#ff00ff] tracking-widest flex items-center gap-2">
+                        <Icon icon="lucide:ticket" /> Cupons Cadastrados
+                      </h3>
+                      <button onClick={loadCoupons} className="text-zinc-500 hover:text-white transition-colors cursor-pointer">
+                        <Icon icon="lucide:refresh-cw" />
+                      </button>
+                    </div>
+
+                    {couponsLoading ? (
+                      <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-[#00f3ff] border-t-transparent rounded-full animate-spin" /></div>
+                    ) : coupons.length === 0 ? (
+                      <p className="text-zinc-600 text-xs font-bold text-center py-10">Nenhum cupom cadastrado.</p>
+                    ) : (
+                      <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                        {coupons.map((c) => (
+                          <div key={c.code} className="flex items-center justify-between bg-zinc-900 rounded-2xl px-4 py-3 border border-white/5">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.active ? 'bg-[#00ff00]' : 'bg-zinc-600'}`} />
+                              <div>
+                                <p className="text-sm font-black text-white tracking-widest">{c.code}</p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  <span className="text-[10px] font-bold text-[#00f3ff]">-{c.discount}%</span>
+                                  {c.usageLimit != null && (
+                                    <span className="text-[10px] text-zinc-500">{c.usageCount ?? 0}/{c.usageLimit} usos</span>
+                                  )}
+                                  {c.expiresAt && (
+                                    <span className="text-[10px] text-zinc-500">até {new Date(c.expiresAt).toLocaleDateString('pt-BR')}</span>
+                                  )}
+                                  {!c.active && <span className="text-[10px] text-red-400 font-black">INATIVO</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setCouponForm({ code: c.code, discount: String(c.discount), active: c.active, expiresAt: c.expiresAt ?? '', usageLimit: c.usageLimit != null ? String(c.usageLimit) : '' })}
+                                className="p-2 rounded-xl text-zinc-500 hover:text-[#00f3ff] hover:bg-[#00f3ff]/10 transition-all cursor-pointer"
+                                title="Editar"
+                              >
+                                <Icon icon="lucide:pencil" className="text-sm" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCoupon(c.code)}
+                                disabled={deletingCoupon === c.code}
+                                className="p-2 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-50"
+                                title="Deletar"
+                              >
+                                {deletingCoupon === c.code
+                                  ? <div className="w-3 h-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                  : <Icon icon="lucide:trash-2" className="text-sm" />}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── CONFIGURAÇÕES ─────────────────────────────────────── */}
+            {tab === 'configuracoes' && siteConfig && (
+              <div>
+                <div className="mb-10">
+                  <h1 className="text-4xl font-black uppercase tracking-tighter text-white">
+                    Configurações <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00f3ff] to-[#ff00ff]">do Site</span>
+                  </h1>
+                  <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest mt-1">Edite as configurações globais da loja</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
+                  {/* WhatsApp */}
+                  <div className="bg-black border border-zinc-800 rounded-[24px] p-6 space-y-4">
+                    <h3 className="text-sm font-black uppercase text-[#25D366] tracking-widest flex items-center gap-2">
+                      <Icon icon="mdi:whatsapp" /> WhatsApp
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Número (com DDI)</label>
+                        <input value={siteConfig.whatsappNumber} onChange={(e) => setSiteConfig({...siteConfig, whatsappNumber: e.target.value})}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#25D366] placeholder:text-zinc-600"
+                          placeholder="5511999999999" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Mensagem Padrão CTA</label>
+                        <textarea value={siteConfig.whatsappMessage} onChange={(e) => setSiteConfig({...siteConfig, whatsappMessage: e.target.value})}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#25D366] placeholder:text-zinc-600 resize-none h-20"
+                          placeholder="Mensagem padrão..." />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Loja */}
+                  <div className="bg-black border border-zinc-800 rounded-[24px] p-6 space-y-4">
+                    <h3 className="text-sm font-black uppercase text-[#00f3ff] tracking-widest flex items-center gap-2">
+                      <Icon icon="lucide:store" /> Dados da Loja
+                    </h3>
+                    <div className="space-y-3">
+                      {[
+                        { key: 'storeName', label: 'Nome da Loja', placeholder: 'Balu 3D' },
+                        { key: 'storeEmail', label: 'E-mail de Contato', placeholder: 'contato@balu3d.com.br' },
+                        { key: 'instagramUrl', label: 'Instagram URL', placeholder: 'https://instagram.com/...' },
+                      ].map(({ key, label, placeholder }) => (
+                        <div key={key}>
+                          <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">{label}</label>
+                          <input value={(siteConfig as unknown as Record<string, unknown>)[key] as string}
+                            onChange={(e) => setSiteConfig({...siteConfig, [key]: e.target.value})}
+                            className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600"
+                            placeholder={placeholder} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pagamentos */}
+                  <div className="bg-black border border-zinc-800 rounded-[24px] p-6 space-y-4">
+                    <h3 className="text-sm font-black uppercase text-[#00ff00] tracking-widest flex items-center gap-2">
+                      <Icon icon="lucide:credit-card" /> Pagamentos
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Desconto Pix (%)</label>
+                        <input type="number" min="0" max="30" value={siteConfig.pixDiscount}
+                          onChange={(e) => setSiteConfig({...siteConfig, pixDiscount: Number(e.target.value)})}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Valor do Frete (R$)</label>
+                        <input type="number" min="0" step="0.01" value={siteConfig.shippingCost ?? 15}
+                          onChange={(e) => setSiteConfig({...siteConfig, shippingCost: Number(e.target.value)})}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-1 block">Frete Grátis acima de (R$, 0=desativado)</label>
+                        <input type="number" min="0" value={siteConfig.freeShippingAbove}
+                          onChange={(e) => setSiteConfig({...siteConfig, freeShippingAbove: Number(e.target.value)})}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00f3ff]" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Modo Manutenção */}
+                  <div className="bg-black border border-zinc-800 rounded-[24px] p-6 space-y-4">
+                    <h3 className="text-sm font-black uppercase text-[#ff00ff] tracking-widest flex items-center gap-2">
+                      <Icon icon="lucide:wrench" /> Manutenção
+                    </h3>
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div>
+                        <p className="text-sm font-black text-white">Modo Manutenção</p>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">Exibe banner de manutenção para visitantes</p>
+                      </div>
+                      <div
+                        onClick={() => setSiteConfig({...siteConfig, maintenanceMode: !siteConfig.maintenanceMode})}
+                        className={`relative w-12 h-6 rounded-full transition-all cursor-pointer ${siteConfig.maintenanceMode ? 'bg-[#ff00ff]' : 'bg-zinc-700'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${siteConfig.maintenanceMode ? 'left-7' : 'left-1'}`} />
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Salvar */}
+                <div className="mt-8 flex items-center gap-4">
+                  <button onClick={handleSaveConfig} disabled={configSaving}
+                    className="px-8 py-4 bg-[#00f3ff] text-black font-black uppercase rounded-2xl hover:bg-[#00d4e0] transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed flex items-center gap-2">
+                    {configSaving ? (
+                      <><div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> Salvando...</>
+                    ) : configSaved ? (
+                      <><Icon icon="lucide:check" /> Salvo!</>
+                    ) : (
+                      <><Icon icon="lucide:save" /> Salvar Configurações</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── AGENDA ────────────────────────────────────────────── */}
+            {tab === 'agenda' && (
+              <TabAgenda
+                agendaEvents={agendaEvents}
+                agendaLoading={agendaLoading}
+                agendaSaving={agendaSaving}
+                deletingEvent={deletingEvent}
+                agendaMsg={agendaMsg}
+                editingEvent={editingEvent}
+                eventForm={eventForm}
+                setEditingEvent={setEditingEvent}
+                setEventForm={setEventForm}
+                onSave={handleSaveEvent}
+                onDelete={handleDeleteEvent}
+              />
             )}
 
           </div>

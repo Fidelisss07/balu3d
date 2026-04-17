@@ -3,9 +3,30 @@
 import Link from 'next/link'
 import { Icon } from '@iconify/react'
 import { useState } from 'react'
+import { saveNewsletter } from '@/lib/db'
 
 export default function Footer() {
   const [email, setEmail] = useState('')
+  const [newsletterMsg, setNewsletterMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [newsletterLoading, setNewsletterLoading] = useState(false)
+
+  async function handleNewsletter(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = email.trim()
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setNewsletterMsg({ type: 'err', text: 'E-mail inválido.' })
+      return
+    }
+    setNewsletterLoading(true)
+    try {
+      await saveNewsletter(trimmed)
+      setNewsletterMsg({ type: 'ok', text: 'Inscrito! Você receberá os drops.' })
+      setEmail('')
+    } catch {
+      setNewsletterMsg({ type: 'err', text: 'Erro ao inscrever. Tente novamente.' })
+    }
+    setNewsletterLoading(false)
+  }
 
   return (
     <footer className="bg-black border-t-2 border-zinc-900 pt-24 pb-12 px-8">
@@ -25,13 +46,31 @@ export default function Footer() {
               &quot;A fronteira entre o digital e o físico desaparece aqui. Transformamos pixels em realidade física para o seu universo gamer.&quot;
             </p>
             <div className="flex gap-4">
-              <a href="#" className="p-3 border-2 border-zinc-800 rounded-2xl text-white hover:bg-[#ff00ff] hover:border-[#ff00ff] transition-all" aria-label="Instagram">
+              <a
+                href="https://instagram.com/balu3d"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 border-2 border-zinc-800 rounded-2xl text-white hover:bg-[#ff00ff] hover:border-[#ff00ff] transition-all"
+                aria-label="Instagram"
+              >
                 <Icon icon="lucide:instagram" className="text-xl" />
               </a>
-              <a href="#" className="p-3 border-2 border-zinc-800 rounded-2xl text-white hover:bg-[#00f3ff] hover:border-[#00f3ff] transition-all" aria-label="Facebook">
+              <a
+                href="https://facebook.com/balu3d"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 border-2 border-zinc-800 rounded-2xl text-white hover:bg-[#00f3ff] hover:border-[#00f3ff] transition-all"
+                aria-label="Facebook"
+              >
                 <Icon icon="lucide:facebook" className="text-xl" />
               </a>
-              <a href="#" className="p-3 border-2 border-zinc-800 rounded-2xl text-white hover:bg-[#00ff00] hover:border-[#00ff00] transition-all" aria-label="Twitter">
+              <a
+                href="https://twitter.com/balu3d"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 border-2 border-zinc-800 rounded-2xl text-white hover:bg-[#00ff00] hover:border-[#00ff00] transition-all"
+                aria-label="Twitter"
+              >
                 <Icon icon="lucide:twitter" className="text-xl" />
               </a>
             </div>
@@ -41,9 +80,9 @@ export default function Footer() {
             <h4 className="font-black uppercase text-xs tracking-[0.3em] text-zinc-600 mb-8">Exploração</h4>
             <ul className="space-y-4">
               <li><Link href="/" className="text-zinc-300 hover:text-[#00f3ff] font-bold transition-colors text-sm uppercase">Início</Link></li>
-              <li><Link href="/#produtos" className="text-zinc-300 hover:text-[#ff00ff] font-bold transition-colors text-sm uppercase">Produtos</Link></li>
-              <li><Link href="#" className="text-zinc-300 hover:text-[#00ff00] font-bold transition-colors text-sm uppercase">Sobre o Printverso</Link></li>
-              <li><Link href="/#ajuda" className="text-zinc-300 hover:text-white font-bold transition-colors text-sm uppercase">Suporte Técnico</Link></li>
+              <li><Link href="/produtos" className="text-zinc-300 hover:text-[#ff00ff] font-bold transition-colors text-sm uppercase">Produtos</Link></li>
+              <li><Link href="/#sobre" className="text-zinc-300 hover:text-[#00ff00] font-bold transition-colors text-sm uppercase">Sobre o Printverso</Link></li>
+              <li><Link href="/ajuda" className="text-zinc-300 hover:text-white font-bold transition-colors text-sm uppercase">Suporte Técnico</Link></li>
             </ul>
           </div>
 
@@ -51,28 +90,34 @@ export default function Footer() {
             <h4 className="font-black uppercase text-xs tracking-[0.3em] text-zinc-600 mb-8">Logística</h4>
             <ul className="space-y-4">
               <li><Link href="/rastreamento" className="text-zinc-300 hover:text-[#00f3ff] font-bold transition-colors text-sm uppercase">Rastreio de Drone</Link></li>
-              <li><Link href="#" className="text-zinc-300 hover:text-[#ff00ff] font-bold transition-colors text-sm uppercase">Frete & Coleta</Link></li>
-              <li><Link href="#" className="text-zinc-300 hover:text-[#00ff00] font-bold transition-colors text-sm uppercase">Trocas & Devoluções</Link></li>
+              <li><Link href="/ajuda#envio" className="text-zinc-300 hover:text-[#ff00ff] font-bold transition-colors text-sm uppercase">Frete &amp; Coleta</Link></li>
+              <li><Link href="/ajuda#devolucoes" className="text-zinc-300 hover:text-[#00ff00] font-bold transition-colors text-sm uppercase">Trocas &amp; Devoluções</Link></li>
             </ul>
           </div>
 
           <div>
             <h4 className="font-black uppercase text-xs tracking-[0.3em] text-zinc-600 mb-8">Level Up News</h4>
             <p className="text-sm text-zinc-500 mb-6 font-bold">Receba drops exclusivos no seu radar.</p>
-            <form className="flex flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
+            <form className="flex flex-col gap-3" onSubmit={handleNewsletter}>
               <input
                 type="email"
                 placeholder="PLAYER@EMAIL.COM"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setNewsletterMsg(null) }}
                 className="bg-zinc-900 border-2 border-zinc-800 text-white px-6 py-4 rounded-2xl focus:outline-none focus:border-[#00f3ff] text-xs font-black placeholder:text-zinc-600"
               />
               <button
                 type="submit"
-                className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-[#ff00ff] hover:text-white transition-all shadow-lg"
+                disabled={newsletterLoading}
+                className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-[#ff00ff] hover:text-white transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Assinar Feed
+                {newsletterLoading ? 'Inscrevendo...' : 'Assinar Feed'}
               </button>
+              {newsletterMsg && (
+                <p className={`text-xs font-bold ${newsletterMsg.type === 'ok' ? 'text-[#00ff00]' : 'text-red-400'}`}>
+                  {newsletterMsg.text}
+                </p>
+              )}
             </form>
           </div>
         </div>

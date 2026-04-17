@@ -43,18 +43,21 @@ export default function Navbar() {
 
         {/* Desktop Menu */}
         <div className="hidden lg:flex items-center gap-8">
-          <Link href="/produtos" className={`text-sm font-bold transition-colors uppercase flex items-center gap-1 hover:text-[#00f3ff] ${isActive('/produtos') ? 'text-[#00f3ff]' : 'text-white'}`}>
-            <Icon icon="lucide:box" /> Produtos
+          <Link href="/produtos" className={`text-sm font-bold transition-colors uppercase flex items-center gap-1.5 hover:text-[#00f3ff] ${isActive('/produtos') ? 'text-[#00f3ff]' : 'text-white'}`}>
+            <Icon icon="lucide:box" className="text-base" /> Produtos
           </Link>
-          <Link href="/ajuda" className={`text-sm font-bold transition-colors uppercase hover:text-[#ff00ff] ${isActive('/ajuda') ? 'text-[#ff00ff]' : 'text-white'}`}>
-            Ajuda
+          <Link href="/agenda" className={`text-sm font-bold transition-colors uppercase flex items-center gap-1.5 hover:text-[#ff00ff] ${isActive('/agenda') ? 'text-[#ff00ff]' : 'text-white'}`}>
+            <Icon icon="lucide:calendar" className="text-base" /> Agenda
           </Link>
-          <Link href="/rastreamento" className={`text-sm font-bold transition-colors uppercase hover:text-[#00ff00] ${isActive('/rastreamento') ? 'text-[#00ff00]' : 'text-white'}`}>
-            Rastreamento
+          <Link href="/ajuda" className={`text-sm font-bold transition-colors uppercase flex items-center gap-1.5 hover:text-[#ff00ff] ${isActive('/ajuda') ? 'text-[#ff00ff]' : 'text-white'}`}>
+            <Icon icon="lucide:help-circle" className="text-base" /> Ajuda
+          </Link>
+          <Link href="/rastreamento" className={`text-sm font-bold transition-colors uppercase flex items-center gap-1.5 hover:text-[#00ff00] ${isActive('/rastreamento') ? 'text-[#00ff00]' : 'text-white'}`}>
+            <Icon icon="lucide:package-search" className="text-base" /> Rastreamento
           </Link>
           {profile?.role === 'admin' && (
-            <Link href="/admin" className={`text-sm font-bold transition-colors uppercase hover:text-[#ff00ff] ${isActive('/admin') ? 'text-[#ff00ff]' : 'text-zinc-400'}`}>
-              Admin
+            <Link href="/admin" className={`text-sm font-bold transition-colors uppercase flex items-center gap-1.5 hover:text-[#ff00ff] ${isActive('/admin') ? 'text-[#ff00ff]' : 'text-zinc-400'}`}>
+              <Icon icon="lucide:layout-dashboard" className="text-base" /> Admin
             </Link>
           )}
         </div>
@@ -82,6 +85,9 @@ export default function Navbar() {
                     <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-50">
                       <Link href="/rastreamento" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors">
                         <Icon icon="lucide:package" className="text-[#00f3ff]" /> Meus Pedidos
+                      </Link>
+                      <Link href="/minha-conta" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors">
+                        <Icon icon="lucide:user-circle" className="text-[#00f3ff]" /> Minha Conta
                       </Link>
                       {profile?.role === 'admin' && (
                         <Link href="/admin" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors">
@@ -129,10 +135,16 @@ export default function Navbar() {
           <Link href="/produtos" className="flex items-center gap-2 text-sm font-bold uppercase text-white hover:text-[#00f3ff] transition-colors" onClick={() => setMenuOpen(false)}>
             <Icon icon="lucide:box" /> Produtos
           </Link>
+          <Link href="/agenda" className="flex items-center gap-2 text-sm font-bold uppercase text-white hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}><Icon icon="lucide:calendar" /> Agenda</Link>
           <Link href="/ajuda" className="block text-sm font-bold uppercase text-white hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}>Ajuda</Link>
           <Link href="/rastreamento" className="block text-sm font-bold uppercase text-white hover:text-[#00ff00] transition-colors" onClick={() => setMenuOpen(false)}>Rastreamento</Link>
           {profile?.role === 'admin' && (
             <Link href="/admin" className="block text-sm font-bold uppercase text-zinc-400 hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}>Admin</Link>
+          )}
+          {user && (
+            <Link href="/minha-conta" className="flex items-center gap-2 text-sm font-bold uppercase text-white hover:text-[#00f3ff] transition-colors" onClick={() => setMenuOpen(false)}>
+              <Icon icon="lucide:user-circle" /> Minha Conta
+            </Link>
           )}
           <div className="pt-4 border-t border-white/10 flex gap-3">
             {user ? (

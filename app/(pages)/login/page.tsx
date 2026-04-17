@@ -29,8 +29,8 @@ function LoginForm() {
 
   // Redireciona se já logado
   useEffect(() => {
-    if (user) router.push('/')
-  }, [user, router])
+    if (user) router.push(searchParams.get('redirect') || '/')
+  }, [user, router, searchParams])
 
   function firebaseError(code: string) {
     const map: Record<string, string> = {
@@ -51,7 +51,8 @@ function LoginForm() {
     setLoading(true)
     try {
       await login(loginForm.email, loginForm.password)
-      router.push('/')
+      const redirectTo = searchParams.get('redirect') || '/'
+      router.push(redirectTo)
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? ''
       setError(firebaseError(code))
@@ -74,7 +75,8 @@ function LoginForm() {
     setLoading(true)
     try {
       await register(registerForm.name, registerForm.email, registerForm.password)
-      router.push('/')
+      const redirectTo = searchParams.get('redirect') || '/'
+      router.push(redirectTo)
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? ''
       setError(firebaseError(code))

@@ -5,22 +5,19 @@ import { useState, useEffect } from 'react'
 import { Icon } from '@iconify/react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
-import { useCarousel } from '@/context/CarouselContext'
+import { getFirestoreProducts } from '@/lib/db'
 
-const pokeCatalog = [
-  { name: 'Pikachu', price: '45,00', color: '#00f3ff', img: 'https://images.unsplash.com/photo-1613771404721-1f92d799e49f?q=80&w=400' },
-  { name: 'Gyarados', price: '120,00', color: '#ff00ff', img: 'https://images.unsplash.com/photo-1559124568-d5a0f7da1ec5?q=80&w=400' },
-  { name: 'Alakazam', price: '85,00', color: '#00ff00', img: 'https://images.unsplash.com/photo-1509248961158-e54f6934749c?q=80&w=400' },
-  { name: 'Gengar', price: '65,00', color: '#00f3ff', img: 'https://images.unsplash.com/photo-1594736223565-3544c039a36d?q=80&w=400' },
-  { name: 'Machamp', price: '95,00', color: '#ff00ff', img: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?q=80&w=400' },
-  { name: 'Blastoise', price: '110,00', color: '#00ff00', img: 'https://images.unsplash.com/photo-1566576721346-d4a3b4eaad5b?q=80&w=400' },
-  { name: 'Venusaur', price: '110,00', color: '#00f3ff', img: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=400' },
-  { name: 'Lapras', price: '90,00', color: '#ff00ff', img: 'https://images.unsplash.com/photo-1544273677-c433136021d4?q=80&w=400' },
-  { name: 'Arcanine', price: '75,00', color: '#00ff00', img: 'https://images.unsplash.com/photo-1606103836293-0a063ee20566?q=80&w=400' },
-  { name: 'Dragonite', price: '120,00', color: '#00f3ff', img: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?q=80&w=400' },
-  { name: 'Mewtwo', price: '150,00', color: '#ff00ff', img: 'https://images.unsplash.com/photo-1589254065878-42c9da997008?q=80&w=400' },
-  { name: 'Articuno', price: '140,00', color: '#00ff00', img: 'https://images.unsplash.com/photo-1509248961158-e54f6934749c?q=80&w=400' },
-]
+const WA_URL = `https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP ?? '5511999999999'}`
+
+interface Product {
+  id: string
+  name: string
+  slug: string
+  price: number
+  color: string
+  img: string
+  visible: boolean
+}
 
 const faqs = [
   { q: 'Qual a resolução das figuras?', a: 'Todas as nossas figuras são impressas em resina 8K de ultra alta definição, garantindo superfícies lisas e detalhes microscópicos preservados.' },
@@ -92,28 +89,24 @@ const slides = [
   },
 ]
 
+
 export default function HomePage() {
-  const { carousel, loading: carouselLoading } = useCarousel()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [currentSlide, setCurrentSlide] = useState(0)
-
-  // Usa carrossel do Firestore se disponível, caso contrário usa fallback estático
-  const slidesToUse = carousel?.slides && carousel.slides.length > 0 ? carousel.slides : slides.map((s, idx) => ({
-    id: idx,
-    title: s.title,
-    subtitle: s.subtitle,
-    image: s.img,
-    bgColor: idx === 0 ? '#1a1a1a' : idx === 1 ? '#000000' : '#1a1a1a',
-    textColor: s.ctaColor.includes('00f3ff') ? '#00f3ff' : s.ctaColor.includes('ff00ff') ? '#ff00ff' : '#00ff00',
-    accentColor: s.ctaColor.includes('00f3ff') ? '#00f3ff' : s.ctaColor.includes('ff00ff') ? '#ff00ff' : '#00ff00',
-  }))
+  const [products, setProducts] = useState<Product[]>([])
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slidesToUse.length)
+      setCurrentSlide((prev) => (prev + 1) % slides.length)
     }, 5000)
     return () => clearInterval(timer)
-  }, [slidesToUse.length])
+  }, [])
+
+  useEffect(() => {
+    getFirestoreProducts()
+      .then((all) => setProducts((all as Product[]).filter((p) => p.visible)))
+      .catch(() => {})
+  }, [])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -122,99 +115,100 @@ export default function HomePage() {
       <main className="flex-1 pt-20">
         {/* HERO CAROUSEL */}
         <section className="relative w-full overflow-hidden" style={{ height: 'calc(100svh - 80px)', minHeight: '580px', maxHeight: '900px' }}>
-          {carouselLoading ? (
-            <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a]">
-              <div className="w-10 h-10 border-2 border-[#00f3ff] border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <>
-              {/* Slides wrapper */}
+          {/* Slides wrapper */}
+          <div
+            className="flex h-full transition-transform duration-700 ease-in-out"
+            style={{ transform: `translateX(-${currentSlide * 100}vw)` }}
+          >
+            {slides.map((slide, idx) => (
               <div
-                className="flex h-full transition-transform duration-700 ease-in-out"
-                style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+                key={idx}
+                className={`h-full flex items-center shrink-0 px-5 md:px-8 relative ${slide.bg}`}
+                style={{ width: '100vw' }}
               >
-                {slidesToUse.map((slide, idx) => (
-                  <div
-                    key={slide.id}
-                    className="w-full h-full flex items-center shrink-0 px-5 md:px-8 relative"
-                    style={{ minWidth: '100%', backgroundColor: slide.bgColor }}
-                  >
-                    <div className="absolute inset-0 bg-grid-dark pointer-events-none opacity-40"></div>
-                    <div className="max-w-7xl w-full mx-auto grid md:grid-cols-2 items-center gap-6 md:gap-12 relative z-10">
-                      <div className="flex flex-col justify-center min-w-0 overflow-hidden">
-                        <h1 className="text-[clamp(2.5rem,8vw,7rem)] font-black mb-3 md:mb-8 leading-[0.85] tracking-tighter break-words overflow-hidden" style={{ color: slide.textColor }}>
-                          {slide.title}<br />
-                          <span style={{ color: slide.accentColor }}>{slide.subtitle}</span>
-                        </h1>
-                        <Link
-                          href="/produtos"
-                          className="self-start inline-flex items-center gap-3 md:gap-6 bg-zinc-900 border-2 px-6 md:px-12 py-3.5 md:py-6 rounded-2xl font-black uppercase text-sm md:text-lg tracking-widest transition-all hover:scale-105"
-                          style={{ borderColor: slide.textColor, color: slide.textColor }}
-                        >
-                          VER PRODUTO <Icon icon="lucide:arrow-right" />
-                        </Link>
-                      </div>
-                      <div className="hidden md:flex justify-center">
-                        {slide.image && (
-                          <div className="relative w-full aspect-square max-w-xl bg-zinc-900 rounded-[80px] shadow-2xl overflow-hidden group border-4 transition-all duration-700" style={{ borderColor: slide.accentColor + '40' }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={slide.image} alt={slide.title} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
-                          </div>
-                        )}
-                      </div>
+                <div className={`absolute inset-0 ${slide.bgGradientDir} ${slide.bgGradient} pointer-events-none`}></div>
+                <div className="max-w-7xl w-full mx-auto grid md:grid-cols-2 items-center gap-6 md:gap-12 relative z-10">
+                  <div className="flex flex-col justify-center min-w-0">
+                    <span
+                      className="inline-block self-start px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.3em] mb-4 md:mb-6 rounded-sm"
+                      style={{ backgroundColor: slide.badgeBg, boxShadow: `0 0 20px ${slide.badgeColor}99`, color: slide.badgeText === 'text-black' ? '#000' : '#fff' }}
+                    >{slide.badge}</span>
+                    <h1 className="text-[clamp(2.5rem,8vw,7rem)] font-black mb-3 md:mb-8 leading-[0.85] tracking-tighter text-white break-words">
+                      {slide.title}<br />
+                      <span className={`text-transparent bg-clip-text bg-gradient-to-r ${slide.subtitleGradient}`}>{slide.subtitle}</span>
+                    </h1>
+                    <p className="text-sm md:text-xl text-zinc-300 mb-5 md:mb-10 max-w-lg leading-relaxed line-clamp-2 md:line-clamp-none">{slide.desc}</p>
+                    <div className="hidden sm:flex flex-wrap gap-3 md:gap-4 mb-5 md:mb-10">
+                      {slide.tags.map((tag) => (
+                        <span key={tag} className="px-3 md:px-4 py-2 bg-zinc-800 rounded-lg text-xs font-bold border border-white/10">{tag}</span>
+                      ))}
+                    </div>
+                    <Link
+                      href="/produtos"
+                      className={`self-start inline-flex items-center gap-3 md:gap-6 bg-zinc-900 border-2 px-6 md:px-12 py-3.5 md:py-6 rounded-2xl font-black uppercase text-sm md:text-lg tracking-widest transition-all hover:scale-105 shadow-[0_0_30px_rgba(0,243,255,0.3)] ${slide.ctaColor}`}
+                    >
+                      {slide.ctaText} <Icon icon={slide.ctaIcon} />
+                    </Link>
+                  </div>
+                  <div className="hidden md:flex justify-center">
+                    <div className={`relative w-full aspect-square max-w-xl bg-zinc-900 rounded-[80px] shadow-2xl overflow-hidden group border-4 transition-all duration-700 ${slide.imgBorder}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={slide.img} alt={slide.imgAlt} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 brightness-110 saturate-[1.3]" />
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
+            ))}
+          </div>
 
-              {/* Navigation Dots */}
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
-                {slidesToUse.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentSlide(idx)}
-                    className="h-2 rounded-full transition-all duration-300 cursor-pointer"
-                    style={{ width: currentSlide === idx ? '32px' : '8px', backgroundColor: currentSlide === idx ? '#00f3ff' : 'rgba(255,255,255,0.3)' }}
-                    aria-label={`Slide ${idx + 1}`}
-                  />
-                ))}
-              </div>
+          {/* Navigation Dots */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
+            {slides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentSlide(idx)}
+                className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${currentSlide === idx ? 'w-8 bg-[#00f3ff]' : 'w-2 bg-white/30'}`}
+                aria-label={`Slide ${idx + 1}`}
+              />
+            ))}
+          </div>
 
-              {/* Arrow controls */}
-              <button
-                onClick={() => setCurrentSlide((prev) => (prev - 1 + slidesToUse.length) % slidesToUse.length)}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
-                aria-label="Slide anterior"
-              >
-                <Icon icon="lucide:chevron-left" className="text-2xl" />
-              </button>
-              <button
-                onClick={() => setCurrentSlide((prev) => (prev + 1) % slidesToUse.length)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
-                aria-label="Próximo slide"
-              >
-                <Icon icon="lucide:chevron-right" className="text-2xl" />
-              </button>
-            </>
-          )}
+          {/* Arrow controls */}
+          <button
+            onClick={() => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length)}
+            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
+            aria-label="Slide anterior"
+          >
+            <Icon icon="lucide:chevron-left" className="text-2xl" />
+          </button>
+          <button
+            onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
+            aria-label="Próximo slide"
+          >
+            <Icon icon="lucide:chevron-right" className="text-2xl" />
+          </button>
         </section>
 
-        {/* POKEMON COLLECTIONS */}
+
+        {/* COLEÇÕES */}
         <section className="py-16 md:py-32 bg-black overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 md:px-8 mb-8 md:mb-16">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tighter">Suas <span className="text-[#ff00ff]">Guildas</span> Pokémon</h2>
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tighter">
+              Suas <span className="text-[#ff00ff]">Coleções</span> Pokémon
+            </h2>
           </div>
           <div className="flex gap-6 md:gap-8 overflow-x-auto px-4 md:px-8 pb-8 md:pb-12 no-scrollbar scroll-smooth">
             {[
-              { title: 'Legendary Collection', color: '#00f3ff', img: 'https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?q=80&w=600' },
-              { title: 'Classic Kanto', color: '#ff00ff', img: 'https://images.unsplash.com/photo-1541562232579-512a21360020?q=80&w=600' },
-              { title: 'Rare Shiny Edition', color: '#00ff00', img: 'https://images.unsplash.com/photo-1542751110-97427bbecf20?q=80&w=800' },
-              { title: 'Limited Drops', color: '#00f3ff', img: 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?q=80&w=600' },
+              { id: 0, title: 'Legendary Collection', img: 'https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?q=80&w=600', color: '#00f3ff' },
+              { id: 1, title: 'Classic Kanto', img: 'https://images.unsplash.com/photo-1541562232579-512a21360020?q=80&w=600', color: '#ff00ff' },
+              { id: 2, title: 'Rare Shiny Edition', img: 'https://images.unsplash.com/photo-1542751110-97427bbecf20?q=80&w=800', color: '#00ff00' },
+              { id: 3, title: 'Limited Drops', img: 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?q=80&w=600', color: '#00f3ff' },
             ].map((col) => (
-              <div key={col.title} className="min-w-[280px] sm:min-w-[340px] md:min-w-[400px] h-[380px] md:h-[500px] rounded-[40px] md:rounded-[50px] relative overflow-hidden group cursor-pointer border-2 border-white/5 transition-all">
+              <div key={col.id} className="min-w-[280px] sm:min-w-[340px] md:min-w-[400px] h-[380px] md:h-[500px] rounded-[40px] md:rounded-[50px] relative overflow-hidden group cursor-pointer border-2 border-white/5 transition-all">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={col.img} alt={col.title} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-all duration-1000" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
                 <div className="absolute bottom-8 md:bottom-12 left-6 md:left-10">
                   <h3 className="text-2xl md:text-3xl font-black uppercase text-white mb-4 md:mb-6">{col.title}</h3>
                   <span className="px-5 py-2 md:px-6 md:py-3 bg-white text-black font-black uppercase text-[10px] rounded-xl group-hover:bg-[#00f3ff] transition-colors">Explorar</span>
@@ -231,29 +225,33 @@ export default function HomePage() {
               <h2 className="text-3xl sm:text-6xl md:text-8xl font-black uppercase mb-4 leading-none tracking-tighter">Shop Our <span className="text-[#00f3ff]">Pokémon</span> Figures</h2>
               <p className="text-zinc-500 font-bold uppercase tracking-[0.4em] text-sm">Colecionáveis de luxo em resina 8K</p>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-12">
-              {pokeCatalog.map((item) => (
-                <div
-                  key={item.name}
-                  className="group cursor-pointer bg-zinc-900/40 p-4 md:p-6 rounded-[30px] md:rounded-[40px] border border-white/5 transition-all"
-                  style={{ borderColor: 'transparent' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = item.color)}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'transparent')}
-                >
-                  <div className="aspect-square bg-zinc-900 rounded-[20px] md:rounded-[30px] overflow-hidden relative mb-4 md:mb-6">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={item.img} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 brightness-95" />
+            {products.length === 0 ? (
+              <p className="text-center text-zinc-500 font-bold py-16">Nenhum produto cadastrado ainda.</p>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-12">
+                {products.map((item) => (
+                  <div
+                    key={item.id}
+                    className="group cursor-pointer bg-zinc-900/40 p-4 md:p-6 rounded-[30px] md:rounded-[40px] border border-white/5 transition-all"
+                    style={{ borderColor: 'transparent' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = item.color || '#00f3ff')}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'transparent')}
+                  >
+                    <div className="aspect-square bg-zinc-900 rounded-[20px] md:rounded-[30px] overflow-hidden relative mb-4 md:mb-6">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={item.img} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 brightness-95" />
+                    </div>
+                    <h3 className="font-black text-base md:text-xl mb-1 md:mb-2 uppercase tracking-tighter text-white">{item.name}</h3>
+                    <p className="font-black text-lg md:text-2xl text-[#00f3ff] mb-3 md:mb-6">R$ {item.price.toFixed(2).replace('.', ',')}</p>
+                    <Link href={`/produto/${item.slug}`}>
+                      <button className="w-full py-3 md:py-4 bg-zinc-800 text-white text-[10px] font-black uppercase rounded-xl md:rounded-2xl border border-white/10 hover:bg-white hover:text-black transition-all cursor-pointer">
+                        Ver Produto
+                      </button>
+                    </Link>
                   </div>
-                  <h3 className="font-black text-base md:text-xl mb-1 md:mb-2 uppercase tracking-tighter text-white">{item.name}</h3>
-                  <p className="font-black text-lg md:text-2xl text-[#00f3ff] mb-3 md:mb-6">R$ {item.price}</p>
-                  <Link href="/carrinho">
-                    <button className="w-full py-3 md:py-4 bg-zinc-800 text-white text-[10px] font-black uppercase rounded-xl md:rounded-2xl border border-white/10 hover:bg-white hover:text-black transition-all cursor-pointer">
-                      Adicionar ao Carrinho
-                    </button>
-                  </Link>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
             <div className="text-center mt-12">
               <Link href="/produtos" className="inline-flex items-center gap-3 border-2 border-white/20 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm tracking-widest hover:border-[#00f3ff] hover:text-[#00f3ff] transition-all">
                 Ver Catálogo Completo <Icon icon="lucide:arrow-right" />
@@ -361,7 +359,7 @@ export default function HomePage() {
               <h2 className="text-4xl sm:text-6xl md:text-8xl font-black uppercase mb-6 md:mb-10 leading-[0.85] md:leading-[0.8] tracking-tighter text-white">Quer um<br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00ff00] to-white">Shiny Raro?</span></h2>
               <p className="text-base md:text-xl text-zinc-400 mb-10 md:mb-16 max-w-xl mx-auto leading-relaxed font-bold">Fale com o Boss no WhatsApp para encomendas exclusivas e orçamentos de projetos sob medida.</p>
               <a
-                href="https://wa.me/550000000000"
+                href="{WA_URL}"
                 className="inline-flex items-center justify-center gap-4 md:gap-6 bg-[#25D366] text-white px-10 md:px-14 py-6 md:py-8 rounded-[30px] font-black uppercase text-base md:text-xl hover:scale-105 hover:shadow-[0_0_50px_rgba(37,211,102,0.5)] transition-all"
               >
                 <Icon icon="logos:whatsapp-icon" className="text-3xl md:text-5xl" />
