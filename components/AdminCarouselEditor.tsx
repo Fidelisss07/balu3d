@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Icon } from '@iconify/react'
 import { useCarousel } from '@/context/CarouselContext'
+import { validateImageFile } from '@/lib/uploadValidation'
+import { logger } from '@/lib/logger'
 
 export function AdminCarouselEditor() {
   const { carousel, updateSlide } = useCarousel()
@@ -14,11 +16,17 @@ export function AdminCarouselEditor() {
   const handleImageUpload = async (slideId: number, file: File) => {
     if (!file) return
 
+    const validation = validateImageFile(file)
+    if (!validation.ok) {
+      setMessage(`✗ ${validation.error}`)
+      setTimeout(() => setMessage(''), 3000)
+      return
+    }
+
     setUploading(true)
     setMessage('Enviando imagem...')
 
     try {
-      // Cria FormData para enviar ao endpoint de upload
       const formData = new FormData()
       formData.append('file', file)
       formData.append('slideId', slideId.toString())
@@ -36,7 +44,7 @@ export function AdminCarouselEditor() {
 
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
-      console.error('Erro:', error)
+      logger.error('Erro:', error)
       setMessage('✗ Erro ao enviar imagem')
       setTimeout(() => setMessage(''), 3000)
     } finally {

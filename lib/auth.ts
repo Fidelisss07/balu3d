@@ -8,18 +8,24 @@ import {
 } from 'firebase/auth'
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from './firebase'
+import { userLoginSchema, userRegisterSchema } from './schemas'
+import { sanitizeText } from './sanitize'
 
 // ─── Registro ────────────────────────────────────────────────────────────────
 
 export async function register(name: string, email: string, password: string) {
-  const credential = await createUserWithEmailAndPassword(auth, email, password)
-  await updateProfile(credential.user, { displayName: name })
+  const parsed = userRegisterSchema.parse({ name, email, password })
+  const safeName = sanitizeText(parsed.name)
 
-  // Cria documento do usuário no Firestore
+  const credential = await createUserWithEmailAndPassword(auth, parsed.email, parsed.password)
+  await updateProfile(credential.user, { displayName: safeName })
+
+  // Cria documento do usuário no Firestore (role fixa = customer;
+  // nunca aceitamos role vindo do cliente).
   await setDoc(doc(db, 'users', credential.user.uid), {
     uid: credential.user.uid,
-    name,
-    email,
+    name: safeName,
+    email: parsed.email,
     role: 'customer',
     createdAt: serverTimestamp(),
   })
@@ -30,7 +36,8 @@ export async function register(name: string, email: string, password: string) {
 // ─── Login ───────────────────────────────────────────────────────────────────
 
 export async function login(email: string, password: string) {
-  const credential = await signInWithEmailAndPassword(auth, email, password)
+  const parsed = userLoginSchema.parse({ email, password })
+  const credential = await signInWithEmailAndPassword(auth, parsed.email, parsed.password)
   return credential.user
 }
 

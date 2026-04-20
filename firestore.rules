@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ================= Helpers =================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ================= Users =================
+    // Cada usuário só lê/escreve o próprio documento. Admin lê todos.
+    // Campo `role` só pode ser alterado por admin.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid)
+        && (!('role' in request.resource.data) || request.resource.data.role == 'customer');
+      allow update: if (isOwner(uid)
+          && (!('role' in request.resource.data)
+              || request.resource.data.role == resource.data.role))
+        || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ================= Products =================
+    // Leitura pública (catálogo). Apenas admin escreve.
+    match /products/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ================= Orders =================
+    // Criação por usuário autenticado (para si mesmo).
+    // Leitura pelo dono ou admin. Update/delete apenas admin.
+    match /orders/{orderId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+
+      match /events/{eventId} {
+        allow read: if isSignedIn()
+          && (get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid
+              || isAdmin());
+        allow write: if isAdmin();
+      }
+    }
+
+    // ================= Carts =================
+    // Cada usuário gerencia o próprio carrinho.
+    match /carts/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ================= Wishlists =================
+    match /wishlists/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ================= Reviews =================
+    // Leitura pública. Cria apenas autenticado (como próprio autor).
+    // Update/delete: autor ou admin.
+    match /reviews/{id} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // ================= Coupons =================
+    // Leitura pública (para validar no frontend). Escrita apenas admin.
+    match /coupons/{code} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ================= Agenda =================
+    // Leitura pública. Escrita apenas admin.
+    match /agenda/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ================= Restock Notifications =================
+    // Cria apenas autenticado (inscrição para notificar).
+    // Admin lê e apaga.
+    match /restock/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // ================= Newsletter =================
+    // Inscrição pública (create), leitura/mutação só admin.
+    match /newsletter/{email} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    // ================= Admin config =================
+    // carousel, collections, faq, config - leitura pública, escrita apenas admin.
+    match /admin/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Bloqueia qualquer coleção não listada acima.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

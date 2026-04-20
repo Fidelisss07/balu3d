@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { useAuth } from './AuthContext'
 import { getCart, saveCart, clearCart, type CartItem } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 interface CartContextType {
   items: CartItem[]
@@ -78,7 +79,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             setItems(firestoreItems)
           }
         } catch (err) {
-          console.error('Erro ao carregar carrinho do Firestore:', err)
+          logger.error('Erro ao carregar carrinho do Firestore:', err)
           // fallback: mantém o que está no localStorage
         } finally {
           setLoading(false)

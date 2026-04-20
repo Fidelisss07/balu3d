@@ -56,7 +56,7 @@ export default function Navbar() {
             <Icon icon="lucide:package-search" className="text-base" /> Rastreamento
           </Link>
           {profile?.role === 'admin' && (
-            <Link href="/admin" className={`text-sm font-bold transition-colors uppercase flex items-center gap-1.5 hover:text-[#ff00ff] ${isActive('/admin') ? 'text-[#ff00ff]' : 'text-zinc-400'}`}>
+            <Link href="/painel-xk7m2q" className={`text-sm font-bold transition-colors uppercase flex items-center gap-1.5 hover:text-[#ff00ff] ${isActive('/painel-xk7m2q') ? 'text-[#ff00ff]' : 'text-zinc-400'}`}>
               <Icon icon="lucide:layout-dashboard" className="text-base" /> Admin
             </Link>
           )}
@@ -90,7 +90,7 @@ export default function Navbar() {
                         <Icon icon="lucide:user-circle" className="text-[#00f3ff]" /> Minha Conta
                       </Link>
                       {profile?.role === 'admin' && (
-                        <Link href="/admin" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors">
+                        <Link href="/painel-xk7m2q" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors">
                           <Icon icon="lucide:layout-dashboard" className="text-[#ff00ff]" /> Admin
                         </Link>
                       )}
@@ -139,7 +139,7 @@ export default function Navbar() {
           <Link href="/ajuda" className="block text-sm font-bold uppercase text-white hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}>Ajuda</Link>
           <Link href="/rastreamento" className="block text-sm font-bold uppercase text-white hover:text-[#00ff00] transition-colors" onClick={() => setMenuOpen(false)}>Rastreamento</Link>
           {profile?.role === 'admin' && (
-            <Link href="/admin" className="block text-sm font-bold uppercase text-zinc-400 hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}>Admin</Link>
+            <Link href="/painel-xk7m2q" className="block text-sm font-bold uppercase text-zinc-400 hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}>Admin</Link>
           )}
           {user && (
             <Link href="/minha-conta" className="flex items-center gap-2 text-sm font-bold uppercase text-white hover:text-[#00f3ff] transition-colors" onClick={() => setMenuOpen(false)}>

@@ -9,6 +9,7 @@ import Footer from '@/components/Footer'
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { createOrder, getSiteConfig, type SiteConfig } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 const SHIPPING_OPTIONS = [
   { id: 'pac',       icon: 'lucide:truck',  label: 'PAC',       desc: '8-12 Dias Úteis', price: 0,  priceLabel: 'Grátis',    color: '#00f3ff' },
@@ -55,7 +56,7 @@ export default function CheckoutPage() {
   const [shipping, setShipping] = useState('pac')
   const [payMethod, setPayMethod] = useState<PayMethod>('credito')
   const [submitting, setSubmitting] = useState(false)
-  const [pixGenerated, setPixGenerated] = useState(false)
+  const [orderDone, setOrderDone] = useState(false)
   const [pixCode, setPixCode] = useState('')
   const [pixCopied, setPixCopied] = useState(false)
   const [siteConfig, setSiteConfig] = useState<SiteConfig | null>(null)
@@ -99,10 +100,10 @@ export default function CheckoutPage() {
     return base + amount.toFixed(2).replace('.', '')
   }
 
-  function handleGeneratePix() {
+  function generateAndShowPix() {
     const code = generatePixCode(finalTotal)
     setPixCode(code)
-    setPixGenerated(true)
+    setOrderDone(true)
   }
 
   async function handleCopyPix() {
@@ -173,13 +174,9 @@ export default function CheckoutPage() {
   const handleSubmit = async () => {
     if (items.length === 0) return
     if (!validate()) return
-    if (payMethod === 'pix' && !pixGenerated) {
-      alert('Por favor, gere o QR Code Pix antes de finalizar o pedido.')
-      return
-    }
     setSubmitting(true)
     try {
-      const orderId = await createOrder({
+      await createOrder({
         userId: user?.uid ?? 'guest',
         userName: form.name,
         userEmail: form.email,
@@ -201,16 +198,20 @@ export default function CheckoutPage() {
         status: 'confirmado',
       })
       await clear()
-      router.push(`/rastreamento?id=${orderId}`)
+      if (payMethod === 'pix') {
+        generateAndShowPix()
+      } else {
+        router.push('/rastreamento')
+      }
     } catch (err) {
-      console.error(err)
+      logger.error(err)
       alert('Erro ao finalizar pedido. Tente novamente.')
     }
     setSubmitting(false)
   }
 
   const inputClass = (field: keyof FormState) =>
-    `w-full bg-black/40 border-2 rounded-2xl px-6 py-4 text-white placeholder:text-zinc-700 outline-none transition-all ${
+    `w-full bg-black/40 border-2 rounded-2xl px-4 py-3 md:px-6 md:py-4 text-white placeholder:text-zinc-700 outline-none transition-all text-sm ${
       errors[field] ? 'border-red-500 focus:border-red-400' : 'border-white/5 focus:border-[#00f3ff] focus:shadow-[0_0_15px_rgba(0,243,255,0.1)]'
     }`
 
@@ -243,13 +244,87 @@ export default function CheckoutPage() {
     )
   }
 
+  if (orderDone) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center px-4 py-24">
+          <div className="w-full max-w-md text-center space-y-8">
+            <div className="flex items-center justify-center gap-3 text-[#00ff00]">
+              <Icon icon="lucide:check-circle-2" className="text-5xl" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black uppercase tracking-tighter text-white mb-2">Pedido Confirmado!</h1>
+              <p className="text-zinc-400 text-sm">Agora escaneie o QR Code abaixo ou copie o código Pix para concluir o pagamento.</p>
+            </div>
+
+            <div className="bg-zinc-900 border border-[#00ff00]/20 rounded-[32px] p-8 space-y-6">
+              <div className="flex items-center justify-between p-4 bg-[#00ff00]/5 rounded-2xl border border-[#00ff00]/20">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Valor a pagar</p>
+                  <p className="text-2xl font-black text-[#00ff00] mt-1">R$ {finalTotal.toFixed(2).replace('.', ',')}</p>
+                </div>
+                <Icon icon="simple-icons:pix" className="text-4xl text-[#32BCAD]" />
+              </div>
+
+              <div className="mx-auto w-fit bg-white p-3 rounded-2xl">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pixCode)}`}
+                  alt="QR Code Pix"
+                  width={220}
+                  height={220}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-center justify-center gap-2 text-amber-400">
+                <Icon icon="lucide:clock" className="text-sm" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Válido por 30 minutos</span>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pix Copia e Cola</p>
+                <div className="flex gap-2">
+                  <input readOnly value={pixCode}
+                    className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-[10px] text-zinc-400 font-mono outline-none truncate" />
+                  <button onClick={handleCopyPix}
+                    className="shrink-0 px-4 py-3 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-xl text-[#00ff00] hover:bg-[#00ff00]/20 transition-all cursor-pointer flex items-center gap-2">
+                    <Icon icon={pixCopied ? 'lucide:check' : 'lucide:copy'} className="text-base" />
+                    <span className="text-[10px] font-black uppercase">{pixCopied ? 'Copiado!' : 'Copiar'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-left space-y-2 p-4 bg-black/40 rounded-2xl border border-white/5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Como pagar:</p>
+                {['Abra o app do seu banco', 'Vá em Pix → Ler QR Code', 'Escaneie o código acima', 'Confirme o pagamento'].map((step, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-[#00ff00]/20 text-[#00ff00] text-[9px] font-black flex items-center justify-center shrink-0">{i + 1}</div>
+                    <p className="text-[10px] text-zinc-400 font-bold">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={() => router.push('/rastreamento')}
+              className="w-full py-4 bg-white text-black font-black uppercase tracking-widest text-sm rounded-2xl hover:bg-zinc-200 transition-all">
+              Ver Meus Pedidos →
+            </button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-grid-dark">
       <Navbar />
 
-      <main className="flex-1 pt-32 pb-24 px-4 md:px-8">
+      <main className="flex-1 pt-28 pb-24 px-4 md:px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col lg:flex-row gap-12">
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
 
             {/* ── LEFT: FORM ────────────────────────────────── */}
             <div className="flex-1 space-y-12">
@@ -278,7 +353,7 @@ export default function CheckoutPage() {
               <section className="space-y-8">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-8 bg-[#00f3ff]" />
-                  <h2 className="text-3xl font-black uppercase tracking-tighter">Dados Pessoais</h2>
+                  <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter">Dados Pessoais</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="col-span-full space-y-2">
@@ -300,7 +375,7 @@ export default function CheckoutPage() {
               <section className="space-y-8">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-8 bg-[#ff00ff]" />
-                  <h2 className="text-3xl font-black uppercase tracking-tighter">Endereço de Entrega</h2>
+                  <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter">Endereço de Entrega</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* CEP */}
@@ -364,7 +439,7 @@ export default function CheckoutPage() {
               <section className="space-y-8">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-8 bg-[#00f3ff]" />
-                  <h2 className="text-3xl font-black uppercase tracking-tighter">Entrega — Correios</h2>
+                  <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter">Entrega — Correios</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {SHIPPING_OPTIONS.map((opt) => (
@@ -397,7 +472,7 @@ export default function CheckoutPage() {
               <section className="space-y-8">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-8 bg-[#00ff00]" />
-                  <h2 className="text-3xl font-black uppercase tracking-tighter">Pagamento Seguro</h2>
+                  <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter">Pagamento Seguro</h2>
                 </div>
 
                 {/* Tabs */}
@@ -469,7 +544,6 @@ export default function CheckoutPage() {
                   ) : (
                     /* PIX */
                     <div className="space-y-6 py-2">
-                      {/* Valor com desconto */}
                       <div className="flex items-center justify-between p-4 bg-[#00ff00]/5 rounded-2xl border border-[#00ff00]/20">
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Valor com desconto Pix ({pixDiscountPct}%)</p>
@@ -477,71 +551,10 @@ export default function CheckoutPage() {
                         </div>
                         <Icon icon="simple-icons:pix" className="text-4xl text-[#32BCAD]" />
                       </div>
-
-                      {!pixGenerated ? (
-                        <button
-                          onClick={handleGeneratePix}
-                          className="w-full py-5 bg-[#32BCAD] hover:bg-[#28a99a] text-white font-black uppercase tracking-widest text-sm rounded-2xl transition-all flex items-center justify-center gap-3 cursor-pointer"
-                        >
-                          <Icon icon="simple-icons:pix" className="text-xl" />
-                          Gerar QR Code Pix
-                        </button>
-                      ) : (
-                        <div className="bg-zinc-900 border border-[#00ff00]/20 rounded-[32px] p-8 text-center space-y-6">
-                          {/* QR Code */}
-                          <div className="mx-auto w-fit bg-white p-3 rounded-2xl">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`}
-                              alt="QR Code Pix"
-                              width={200}
-                              height={200}
-                              className="rounded-xl"
-                            />
-                          </div>
-
-                          {/* Tempo limite */}
-                          <div className="flex items-center justify-center gap-2 text-amber-400">
-                            <Icon icon="lucide:clock" className="text-sm" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Válido por 30 minutos</span>
-                          </div>
-
-                          {/* Código copia-e-cola */}
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pix Copia e Cola</p>
-                            <div className="flex gap-2">
-                              <input
-                                readOnly
-                                value={pixCode}
-                                className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-[10px] text-zinc-400 font-mono outline-none truncate"
-                              />
-                              <button
-                                onClick={handleCopyPix}
-                                className="shrink-0 px-4 py-3 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-xl text-[#00ff00] hover:bg-[#00ff00]/20 transition-all cursor-pointer flex items-center gap-2"
-                              >
-                                <Icon icon={pixCopied ? 'lucide:check' : 'lucide:copy'} className="text-base" />
-                                <span className="text-[10px] font-black uppercase">{pixCopied ? 'Copiado!' : 'Copiar'}</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Instruções */}
-                          <div className="text-left space-y-2 p-4 bg-black/40 rounded-2xl border border-white/5">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Como pagar:</p>
-                            {['Abra o app do seu banco', 'Vá em Pix → Ler QR Code', 'Escaneie o código acima', 'Confirme o pagamento'].map((step, i) => (
-                              <div key={i} className="flex items-center gap-3">
-                                <div className="w-5 h-5 rounded-full bg-[#00ff00]/20 text-[#00ff00] text-[9px] font-black flex items-center justify-center shrink-0">{i + 1}</div>
-                                <p className="text-[10px] text-zinc-400 font-bold">{step}</p>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="flex items-center justify-center gap-2 text-[#00ff00]">
-                            <Icon icon="lucide:zap" className="text-sm" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Confirmação instantânea</span>
-                          </div>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-3 p-4 bg-[#32BCAD]/10 rounded-2xl border border-[#32BCAD]/20">
+                        <Icon icon="lucide:info" className="text-[#32BCAD] text-xl shrink-0" />
+                        <p className="text-[10px] font-bold text-zinc-300 uppercase tracking-wide">Ao finalizar, o QR Code Pix será gerado automaticamente para você pagar.</p>
+                      </div>
                     </div>
                   )}
 
@@ -554,9 +567,9 @@ export default function CheckoutPage() {
             </div>
 
             {/* ── RIGHT: ORDER SUMMARY ─────────────────────── */}
-            <aside className="lg:w-96">
-              <div className="sticky top-28 space-y-8">
-                <div className="bg-zinc-900/80 border-2 border-white/5 rounded-[40px] p-8 space-y-8 shadow-2xl">
+            <aside className="w-full lg:w-96 lg:shrink-0">
+              <div className="lg:sticky lg:top-28 space-y-6 lg:space-y-8">
+                <div className="bg-zinc-900/80 border-2 border-white/5 rounded-[32px] md:rounded-[40px] p-6 md:p-8 space-y-6 md:space-y-8 shadow-2xl">
                   <h2 className="text-xl font-black uppercase tracking-widest text-white border-b-2 border-white/5 pb-6">
                     Resumo do Pedido
                   </h2>
@@ -619,7 +632,7 @@ export default function CheckoutPage() {
                     className="relative w-full group overflow-hidden mt-4 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <div className="absolute -inset-1 bg-gradient-to-r from-[#00f3ff] via-[#ff00ff] to-[#00ff00] rounded-2xl blur opacity-25 group-hover:opacity-100 transition duration-500" />
-                    <div className="relative flex items-center justify-center gap-3 w-full bg-white text-black py-6 rounded-2xl font-black uppercase text-sm tracking-[0.2em] transition-all group-hover:bg-black group-hover:text-white">
+                    <div className="relative flex items-center justify-center gap-3 w-full bg-white text-black py-4 md:py-6 rounded-2xl font-black uppercase text-xs md:text-sm tracking-[0.2em] transition-all group-hover:bg-black group-hover:text-white">
                       {submitting ? (
                         <>
                           <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />

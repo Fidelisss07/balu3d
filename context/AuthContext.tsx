@@ -37,8 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
         setProfile(snap.exists() ? (snap.data() as UserProfile) : null)
+        // Seta cookie de sessão lido pelo middleware (expira em 1h junto com o token).
+        const token = await firebaseUser.getIdToken()
+        document.cookie = `__session=${token}; Path=/; Max-Age=3600; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`
       } else {
         setProfile(null)
+        document.cookie = '__session=; Path=/; Max-Age=0; SameSite=Lax'
       }
       setLoading(false)
     })

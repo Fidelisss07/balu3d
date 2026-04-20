@@ -23,9 +23,55 @@ function LoginForm() {
   const [showReset, setShowReset] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
 
+  // Brute force protection: 5 tentativas falhas -> bloqueia botão por 30s
+  const MAX_ATTEMPTS = 5
+  const LOCKOUT_MS = 30_000
+  const [lockUntil, setLockUntil] = useState(0)
+  const [lockRemaining, setLockRemaining] = useState(0)
+
   useEffect(() => {
     if (searchParams.get('tab') === 'register') setTab('register')
   }, [searchParams])
+
+  // Restaura lockout do localStorage
+  useEffect(() => {
+    const stored = parseInt(localStorage.getItem('login_lock_until') || '0', 10)
+    if (stored > Date.now()) setLockUntil(stored)
+  }, [])
+
+  // Contador regressivo enquanto bloqueado
+  useEffect(() => {
+    if (lockUntil <= Date.now()) {
+      setLockRemaining(0)
+      return
+    }
+    const tick = () => {
+      const rem = Math.max(0, Math.ceil((lockUntil - Date.now()) / 1000))
+      setLockRemaining(rem)
+      if (rem === 0) {
+        localStorage.removeItem('login_lock_until')
+        localStorage.removeItem('login_attempts')
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [lockUntil])
+
+  function registerFailedAttempt() {
+    const attempts = parseInt(localStorage.getItem('login_attempts') || '0', 10) + 1
+    localStorage.setItem('login_attempts', attempts.toString())
+    if (attempts >= MAX_ATTEMPTS) {
+      const until = Date.now() + LOCKOUT_MS
+      localStorage.setItem('login_lock_until', until.toString())
+      setLockUntil(until)
+    }
+  }
+
+  function resetAttempts() {
+    localStorage.removeItem('login_attempts')
+    localStorage.removeItem('login_lock_until')
+  }
 
   // Redireciona se já logado
   useEffect(() => {
@@ -48,14 +94,20 @@ function LoginForm() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    if (lockUntil > Date.now()) {
+      setError(`Muitas tentativas. Aguarde ${lockRemaining}s.`)
+      return
+    }
     setLoading(true)
     try {
       await login(loginForm.email, loginForm.password)
+      resetAttempts()
       const redirectTo = searchParams.get('redirect') || '/'
       router.push(redirectTo)
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? ''
       setError(firebaseError(code))
+      registerFailedAttempt()
     } finally {
       setLoading(false)
     }
@@ -68,18 +120,20 @@ function LoginForm() {
       setError('As senhas não coincidem.')
       return
     }
-    if (registerForm.password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres.')
-      return
-    }
     setLoading(true)
     try {
       await register(registerForm.name, registerForm.email, registerForm.password)
       const redirectTo = searchParams.get('redirect') || '/'
       router.push(redirectTo)
     } catch (err: unknown) {
-      const code = (err as { code?: string }).code ?? ''
-      setError(firebaseError(code))
+      // Erro pode ser de validação Zod ou de Firebase
+      const zodIssue = (err as { issues?: Array<{ message: string }> }).issues?.[0]?.message
+      if (zodIssue) {
+        setError(zodIssue)
+      } else {
+        const code = (err as { code?: string }).code ?? ''
+        setError(firebaseError(code))
+      }
     } finally {
       setLoading(false)
     }
@@ -203,10 +257,14 @@ function LoginForm() {
                         Esqueci a senha
                       </button>
                     </div>
-                    <button type="submit" disabled={loading} className="w-full py-5 bg-[#00f3ff] text-black font-black uppercase text-sm tracking-[0.2em] rounded-2xl cursor-pointer hover:shadow-[0_0_30px_rgba(0,243,255,0.4)] transition-all hover:scale-[1.02] disabled:opacity-50 disabled:scale-100">
+                    <button type="submit" disabled={loading || lockRemaining > 0} className="w-full py-5 bg-[#00f3ff] text-black font-black uppercase text-sm tracking-[0.2em] rounded-2xl cursor-pointer hover:shadow-[0_0_30px_rgba(0,243,255,0.4)] transition-all hover:scale-[1.02] disabled:opacity-50 disabled:scale-100 disabled:cursor-not-allowed">
                       {loading ? (
                         <span className="flex items-center justify-center gap-2">
                           <Icon icon="lucide:loader-2" className="animate-spin" /> Entrando...
+                        </span>
+                      ) : lockRemaining > 0 ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Icon icon="lucide:shield-alert" /> Bloqueado ({lockRemaining}s)
                         </span>
                       ) : 'Entrar no Printverso'}
                     </button>
@@ -241,7 +299,7 @@ function LoginForm() {
                       <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-4">Senha</label>
                       <div className="relative border-2 border-white/5 rounded-2xl bg-zinc-900/50 focus-within:border-[#ff00ff] focus-within:shadow-[0_0_15px_rgba(255,0,255,0.3)] transition-all">
                         <Icon icon="lucide:lock" className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-xl" />
-                        <input type="password" placeholder="MÍNIMO 6 CARACTERES" value={registerForm.password} onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })} required
+                        <input type="password" placeholder="MÍN. 8 CARACTERES, 1 MAIÚSCULA, 1 NÚMERO" value={registerForm.password} onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })} required
                           className="w-full bg-transparent py-4 pl-12 pr-4 text-white placeholder:text-zinc-700 focus:outline-none font-bold text-sm" />
                       </div>
                     </div>

@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Icon } from '@iconify/react'
 import { addFirestoreProduct } from '@/lib/db'
+import { validateImageFiles } from '@/lib/uploadValidation'
 
 interface FirestoreProduct {
   id: string
@@ -256,10 +257,17 @@ export default function TabCriarProduto({ onProductCreated }: Props) {
             <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest block mb-2">
               Imagens * <span className="text-zinc-700 normal-case font-bold">(até 10 fotos)</span>
             </label>
-            <input ref={imgInputRef} type="file" accept="image/*" multiple className="hidden"
+            <input ref={imgInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden"
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []).slice(0, 10)
                 if (!files.length) return
+                const res = validateImageFiles(files)
+                if (!res.ok) {
+                  setFormError(res.error)
+                  if (imgInputRef.current) imgInputRef.current.value = ''
+                  return
+                }
+                setFormError('')
                 setImgFiles((prev) => [...prev, ...files].slice(0, 10))
                 const newPreviews = files.map((f) => URL.createObjectURL(f))
                 setImgPreviews((prev) => [...prev, ...newPreviews].slice(0, 10))

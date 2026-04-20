@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { getCarousel, updateCarousel, type Carousel } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 interface CarouselContextType {
   carousel: Carousel | null
@@ -35,7 +36,7 @@ export function CarouselProvider({ children }: { children: ReactNode }) {
         clearTimeout(timeoutId)
         setCarousel(data)
       } catch (err) {
-        console.error('Erro ao carregar carrossel:', err)
+        logger.error('Erro ao carregar carrossel:', err)
         // Fallback: usar valores padrão
         setCarousel({
           slides: [
@@ -64,7 +65,7 @@ export function CarouselProvider({ children }: { children: ReactNode }) {
     try {
       await updateCarousel(updated)
     } catch (err) {
-      console.error('Erro ao atualizar carrossel:', err)
+      logger.error('Erro ao atualizar carrossel:', err)
     }
   }
 
