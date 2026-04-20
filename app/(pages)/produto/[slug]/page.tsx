@@ -347,7 +347,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
                 {product.category}
               </span>
 
-              <h1 className="text-5xl md:text-7xl font-black uppercase leading-none tracking-tighter mb-4 text-white">
+              <h1 className="text-4xl sm:text-5xl md:text-7xl font-black uppercase leading-none tracking-tighter mb-4 text-white">
                 {product.name.split(' ').length > 1 ? (
                   <>
                     {product.name.split(' ')[0]}{' '}
@@ -619,7 +619,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
             ) : (
               <div className="grid md:grid-cols-3 gap-6">
                 {reviews.map((r) => (
-                  <div key={r.id} className="bg-zinc-900/50 rounded-[30px] p-8 border border-white/5">
+                  <div key={r.id} className="bg-zinc-900/50 rounded-[30px] p-5 md:p-8 border border-white/5">
                     <div className="flex text-[#00ff00] text-sm mb-3">
                       {[1,2,3,4,5].map((s) => (
                         <Icon key={s} icon={s <= r.rating ? 'mdi:star' : 'mdi:star-outline'} />

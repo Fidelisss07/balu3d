@@ -176,14 +176,14 @@ export default function HomePage() {
           {/* Arrow controls */}
           <button
             onClick={() => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length)}
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
+            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
             aria-label="Slide anterior"
           >
             <Icon icon="lucide:chevron-left" className="text-2xl" />
           </button>
           <button
             onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
+            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 transition-all cursor-pointer"
             aria-label="Próximo slide"
           >
             <Icon icon="lucide:chevron-right" className="text-2xl" />
@@ -353,10 +353,10 @@ export default function HomePage() {
 
         {/* WHATSAPP CTA */}
         <section id="ajuda" className="py-16 md:py-32 px-4 md:px-8 bg-black">
-          <div className="max-w-5xl mx-auto bg-zinc-900 rounded-[50px] md:rounded-[80px] p-10 md:p-16 lg:p-32 overflow-hidden relative border-4 border-[#00ff00]/10">
+          <div className="max-w-5xl mx-auto bg-zinc-900 rounded-[50px] md:rounded-[80px] p-8 sm:p-10 md:p-16 lg:p-32 overflow-hidden relative border-4 border-[#00ff00]/10">
             <div className="relative z-10 text-center">
               <span className="inline-block px-5 py-2 bg-[#00ff00] text-black text-[10px] font-black uppercase tracking-widest mb-8 md:mb-10 rounded-full">SUPORTE LENDÁRIO</span>
-              <h2 className="text-4xl sm:text-6xl md:text-8xl font-black uppercase mb-6 md:mb-10 leading-[0.85] md:leading-[0.8] tracking-tighter text-white">Quer um<br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00ff00] to-white">Shiny Raro?</span></h2>
+              <h2 className="text-3xl sm:text-5xl md:text-8xl font-black uppercase mb-6 md:mb-10 leading-[0.85] md:leading-[0.8] tracking-tighter text-white">Quer um<br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00ff00] to-white">Shiny Raro?</span></h2>
               <p className="text-base md:text-xl text-zinc-400 mb-10 md:mb-16 max-w-xl mx-auto leading-relaxed font-bold">Fale com o Boss no WhatsApp para encomendas exclusivas e orçamentos de projetos sob medida.</p>
               <a
                 href="{WA_URL}"

@@ -40,7 +40,7 @@ export default function AjudaPage() {
               <span className="text-[#00ff00]">Ajuda</span>
             </nav>
             <span className="inline-block px-4 py-2 bg-[#00ff00] text-black text-[10px] font-black uppercase tracking-widest mb-6 rounded-full">CENTRAL DE AJUDA</span>
-            <h1 className="text-4xl sm:text-6xl md:text-7xl font-black uppercase tracking-tighter text-white leading-none mb-4">
+            <h1 className="text-3xl sm:text-5xl md:text-7xl font-black uppercase tracking-tighter text-white leading-none mb-4">
               Como podemos<br /><span className="text-[#00ff00]">te ajudar?</span>
             </h1>
             <p className="text-zinc-500 font-bold max-w-lg mx-auto">Encontre respostas para as dúvidas mais comuns ou fale diretamente com a gente pelo WhatsApp.</p>

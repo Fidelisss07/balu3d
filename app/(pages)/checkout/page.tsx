@@ -538,7 +538,7 @@ export default function CheckoutPage() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   {(['credito', 'pix'] as PayMethod[]).map((m) => (
                     <button
                       key={m}
@@ -576,7 +576,7 @@ export default function CheckoutPage() {
                         {errors.cardNumber && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.cardNumber}</p>}
                       </div>
                       {/* Validade + CVV */}
-                      <div className="grid grid-cols-2 gap-6">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-6">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Validade *</label>
                           <input name="cardExpiry" type="text" inputMode="numeric" placeholder="MM/AA" value={form.cardExpiry} onChange={handleChange}

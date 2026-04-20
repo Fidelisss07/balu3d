@@ -75,7 +75,7 @@ export default function ProdutosPage() {
                   <Icon icon="lucide:chevron-right" className="text-xs" />
                   <span className="text-[#00f3ff]">Produtos</span>
                 </nav>
-                <h1 className="text-4xl sm:text-6xl md:text-7xl font-black uppercase tracking-tighter text-white leading-none">
+                <h1 className="text-3xl sm:text-5xl md:text-7xl font-black uppercase tracking-tighter text-white leading-none">
                   Catálogo <span className="text-[#00f3ff]">3D</span>
                 </h1>
                 <p className="text-zinc-500 font-bold uppercase tracking-[0.3em] text-xs mt-4">
@@ -84,7 +84,7 @@ export default function ProdutosPage() {
               </div>
 
               {/* Sort */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-start md:self-auto">
                 <span className="text-xs text-zinc-500 font-bold uppercase">Ordenar:</span>
                 <select
                   value={sortBy}
