@@ -267,7 +267,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
             <span className="text-[#00f3ff]">{product.name}</span>
           </nav>
 
-          <div className="grid lg:grid-cols-2 gap-16 mb-24">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 mb-24">
             {/* IMAGEM */}
             <div>
               {(() => {
@@ -440,13 +440,13 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
               )}
 
               {/* Botões */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="flex gap-3 mb-6">
                 <button
                   onClick={handleAddToCart}
                   disabled={isOutOfStock}
-                  className="flex-1 bg-[#00f3ff] text-black h-20 rounded-3xl flex items-center justify-center gap-4 font-black uppercase tracking-widest hover:scale-[1.02] transition-all shadow-[0_0_30px_rgba(0,243,255,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-[#00f3ff] text-black py-4 px-6 rounded-2xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-sm hover:scale-[1.02] transition-all shadow-[0_0_30px_rgba(0,243,255,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Icon icon={addedMsg ? 'lucide:check' : 'lucide:shopping-bag'} className="text-2xl" />
+                  <Icon icon={addedMsg ? 'lucide:check' : 'lucide:shopping-bag'} className="text-xl" />
                   {addedMsg ? 'Adicionado!' : isOutOfStock ? 'Esgotado' : 'Adicionar ao Carrinho'}
                 </button>
                 {user && (
@@ -454,15 +454,15 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
                     onClick={handleToggleWishlist}
                     disabled={wishlistLoading}
                     title={wishlisted ? 'Remover da Wishlist' : 'Adicionar à Wishlist'}
-                    className={`w-20 h-20 rounded-3xl flex items-center justify-center border-2 transition-all cursor-pointer disabled:opacity-50 ${
+                    className={`w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center border-2 transition-all cursor-pointer disabled:opacity-50 self-center ${
                       wishlisted
                         ? 'border-[#ff00ff] bg-[#ff00ff]/10 text-[#ff00ff]'
                         : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-[#ff00ff] hover:text-[#ff00ff]'
                     }`}
                   >
                     {wishlistLoading
-                      ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      : <Icon icon={wishlisted ? 'mdi:heart' : 'mdi:heart-outline'} className="text-2xl" />
+                      ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      : <Icon icon={wishlisted ? 'mdi:heart' : 'mdi:heart-outline'} className="text-xl" />
                     }
                   </button>
                 )}

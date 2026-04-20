@@ -136,8 +136,8 @@ export default function Navbar() {
             <Icon icon="lucide:box" /> Produtos
           </Link>
           <Link href="/agenda" className="flex items-center gap-2 text-sm font-bold uppercase text-white hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}><Icon icon="lucide:calendar" /> Agenda</Link>
-          <Link href="/ajuda" className="block text-sm font-bold uppercase text-white hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}>Ajuda</Link>
-          <Link href="/rastreamento" className="block text-sm font-bold uppercase text-white hover:text-[#00ff00] transition-colors" onClick={() => setMenuOpen(false)}>Rastreamento</Link>
+          <Link href="/ajuda" className="flex items-center gap-2 text-sm font-bold uppercase text-white hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}><Icon icon="lucide:help-circle" /> Ajuda</Link>
+          <Link href="/rastreamento" className="flex items-center gap-2 text-sm font-bold uppercase text-white hover:text-[#00ff00] transition-colors" onClick={() => setMenuOpen(false)}><Icon icon="lucide:package-search" /> Rastreamento</Link>
           {profile?.role === 'admin' && (
             <Link href="/painel-xk7m2q" className="block text-sm font-bold uppercase text-zinc-400 hover:text-[#ff00ff] transition-colors" onClick={() => setMenuOpen(false)}>Admin</Link>
           )}
