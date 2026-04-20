@@ -228,6 +228,9 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       qty,
       img: product.img,
       color: product.color,
+      material: 'Resina 8K · Impressão 3D',
+      size: selectedSize || product.height || undefined,
+      category: product.category,
     })
     setAddedMsg(true)
     setTimeout(() => setAddedMsg(false), 2000)

@@ -168,29 +168,55 @@ function OrderDetailModal({
               <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-3">Endereço de Entrega</p>
               <p className="text-sm font-black text-white">{order.address.name}</p>
               <p className="text-xs text-zinc-400">{order.address.logradouro}</p>
+              {order.address.bairro && <p className="text-xs text-zinc-400">{order.address.bairro}</p>}
               <p className="text-xs text-zinc-400">{order.address.city} — {order.address.state} · CEP {order.address.cep}</p>
+              <p className="text-xs text-zinc-500 mt-1">{order.address.email}</p>
             </div>
           )}
 
+          {/* Entrega + Pagamento */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-zinc-900/50 border border-white/5 rounded-2xl p-4">
+              <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-2">Tipo de Entrega</p>
+              <p className="text-sm font-black text-white uppercase">{order.shippingMethod ?? '—'}</p>
+              <p className="text-[10px] text-zinc-500 mt-1">{fmt(order.shipping)}</p>
+            </div>
+            <div className="bg-zinc-900/50 border border-white/5 rounded-2xl p-4">
+              <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-2">Pagamento</p>
+              <p className="text-sm font-black text-white uppercase">{order.paymentMethod === 'pix' ? 'PIX' : 'Cartão de Crédito'}</p>
+            </div>
+          </div>
+
           {/* Itens */}
           <div className="bg-zinc-900/50 border border-white/5 rounded-2xl p-5">
-            <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-3">Itens</p>
-            <div className="space-y-3">
+            <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest mb-3">Itens do Pedido</p>
+            <div className="space-y-4">
               {order.items.map((item) => (
-                <div key={item.slug} className="flex items-center gap-3">
+                <div key={item.slug} className="flex items-start gap-3 pb-4 border-b border-zinc-800 last:border-0 last:pb-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.img} alt={item.name} className="w-10 h-10 rounded-xl object-cover border border-white/5" />
-                  <div className="flex-1">
+                  <img src={item.img} alt={item.name} className="w-14 h-14 rounded-xl object-cover border border-white/5 shrink-0" />
+                  <div className="flex-1 min-w-0">
                     <p className="text-xs font-black text-white">{item.name}</p>
-                    <p className="text-[10px] text-zinc-500">x{item.qty}</p>
+                    {item.category && <p className="text-[10px] text-zinc-500 mt-0.5">{item.category}</p>}
+                    {item.material && (
+                      <p className="text-[10px] text-[#00f3ff] mt-0.5 flex items-center gap-1">
+                        <Icon icon="lucide:layers" className="text-[10px]" /> {item.material}
+                      </p>
+                    )}
+                    {item.size && (
+                      <p className="text-[10px] text-[#ff00ff] mt-0.5 flex items-center gap-1">
+                        <Icon icon="lucide:ruler" className="text-[10px]" /> Tamanho: {item.size}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-zinc-500 mt-1">Qtd: {item.qty} · {fmt(item.price)} un.</p>
                   </div>
-                  <p className="text-xs font-black text-white">{fmt(item.price * item.qty)}</p>
+                  <p className="text-xs font-black text-white shrink-0">{fmt(item.price * item.qty)}</p>
                 </div>
               ))}
             </div>
             <div className="mt-4 pt-4 border-t border-zinc-800 space-y-1">
               <div className="flex justify-between text-xs text-zinc-400"><span>Subtotal</span><span>{fmt(order.subtotal)}</span></div>
-              <div className="flex justify-between text-xs text-zinc-400"><span>Frete</span><span>{fmt(order.shipping)}</span></div>
+              <div className="flex justify-between text-xs text-zinc-400"><span>Frete ({order.shippingMethod})</span><span>{fmt(order.shipping)}</span></div>
               <div className="flex justify-between text-sm font-black text-white"><span>Total</span><span>{fmt(order.total)}</span></div>
             </div>
           </div>

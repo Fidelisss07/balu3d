@@ -26,6 +26,10 @@ export interface CartItem {
   qty: number
   img: string
   color: string
+  // campos opcionais — preenchidos na página do produto
+  material?: string
+  size?: string
+  category?: string
 }
 
 export interface Order {

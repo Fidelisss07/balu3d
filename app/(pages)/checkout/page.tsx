@@ -57,6 +57,7 @@ export default function CheckoutPage() {
   const [payMethod, setPayMethod] = useState<PayMethod>('credito')
   const [submitting, setSubmitting] = useState(false)
   const [orderDone, setOrderDone] = useState(false)
+  const [orderMethod, setOrderMethod] = useState<PayMethod>('pix')
   const [pixCode, setPixCode] = useState('')
   const [pixCopied, setPixCopied] = useState(false)
   const [siteConfig, setSiteConfig] = useState<SiteConfig | null>(null)
@@ -168,6 +169,15 @@ export default function CheckoutPage() {
       if (form.cardCvv.length < 3) e.cardCvv = 'CVV inválido'
     }
     setErrors(e)
+    if (Object.keys(e).length > 0) {
+      // Scrolla até o primeiro campo com erro
+      const firstKey = Object.keys(e)[0]
+      const el = document.querySelector(`[name="${firstKey}"]`) as HTMLElement | null
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.focus()
+      }
+    }
     return Object.keys(e).length === 0
   }
 
@@ -198,10 +208,11 @@ export default function CheckoutPage() {
         status: 'confirmado',
       })
       await clear()
+      setOrderMethod(payMethod)
       if (payMethod === 'pix') {
         generateAndShowPix()
       } else {
-        router.push('/rastreamento')
+        setOrderDone(true)
       }
     } catch (err) {
       logger.error(err)
@@ -245,72 +256,123 @@ export default function CheckoutPage() {
   }
 
   if (orderDone) {
+    const isPix = orderMethod === 'pix'
     return (
       <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
         <Navbar />
         <main className="flex-1 flex items-center justify-center px-4 py-24">
           <div className="w-full max-w-md text-center space-y-8">
-            <div className="flex items-center justify-center gap-3 text-[#00ff00]">
-              <Icon icon="lucide:check-circle-2" className="text-5xl" />
+
+            {/* Ícone animado */}
+            <div className="relative flex items-center justify-center">
+              <div className="absolute w-32 h-32 rounded-full bg-[#00ff00]/10 animate-ping" />
+              <div className="relative w-24 h-24 rounded-full bg-[#00ff00]/20 border-2 border-[#00ff00]/40 flex items-center justify-center">
+                <Icon icon="lucide:check-circle-2" className="text-5xl text-[#00ff00]" />
+              </div>
             </div>
+
+            {/* Título */}
             <div>
-              <h1 className="text-3xl font-black uppercase tracking-tighter text-white mb-2">Pedido Confirmado!</h1>
-              <p className="text-zinc-400 text-sm">Agora escaneie o QR Code abaixo ou copie o código Pix para concluir o pagamento.</p>
+              <h1 className="text-4xl font-black uppercase tracking-tighter text-white mb-3">
+                {isPix ? 'Pedido Confirmado!' : 'Obrigado pela Compra!'}
+              </h1>
+              <p className="text-zinc-400 text-sm leading-relaxed">
+                {isPix
+                  ? 'Escaneie o QR Code abaixo ou copie o código Pix para concluir o pagamento.'
+                  : 'Seu pedido foi registrado com sucesso. Em breve nossa equipe entrará em contato para confirmar a produção.'}
+              </p>
             </div>
 
-            <div className="bg-zinc-900 border border-[#00ff00]/20 rounded-[32px] p-8 space-y-6">
-              <div className="flex items-center justify-between p-4 bg-[#00ff00]/5 rounded-2xl border border-[#00ff00]/20">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Valor a pagar</p>
-                  <p className="text-2xl font-black text-[#00ff00] mt-1">R$ {finalTotal.toFixed(2).replace('.', ',')}</p>
-                </div>
-                <Icon icon="simple-icons:pix" className="text-4xl text-[#32BCAD]" />
-              </div>
-
-              <div className="mx-auto w-fit bg-white p-3 rounded-2xl">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pixCode)}`}
-                  alt="QR Code Pix"
-                  width={220}
-                  height={220}
-                  className="rounded-xl"
-                />
-              </div>
-
-              <div className="flex items-center justify-center gap-2 text-amber-400">
-                <Icon icon="lucide:clock" className="text-sm" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Válido por 30 minutos</span>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pix Copia e Cola</p>
-                <div className="flex gap-2">
-                  <input readOnly value={pixCode}
-                    className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-[10px] text-zinc-400 font-mono outline-none truncate" />
-                  <button onClick={handleCopyPix}
-                    className="shrink-0 px-4 py-3 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-xl text-[#00ff00] hover:bg-[#00ff00]/20 transition-all cursor-pointer flex items-center gap-2">
-                    <Icon icon={pixCopied ? 'lucide:check' : 'lucide:copy'} className="text-base" />
-                    <span className="text-[10px] font-black uppercase">{pixCopied ? 'Copiado!' : 'Copiar'}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="text-left space-y-2 p-4 bg-black/40 rounded-2xl border border-white/5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Como pagar:</p>
-                {['Abra o app do seu banco', 'Vá em Pix → Ler QR Code', 'Escaneie o código acima', 'Confirme o pagamento'].map((step, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-[#00ff00]/20 text-[#00ff00] text-[9px] font-black flex items-center justify-center shrink-0">{i + 1}</div>
-                    <p className="text-[10px] text-zinc-400 font-bold">{step}</p>
+            {isPix ? (
+              <div className="bg-zinc-900 border border-[#00ff00]/20 rounded-[32px] p-8 space-y-6">
+                <div className="flex items-center justify-between p-4 bg-[#00ff00]/5 rounded-2xl border border-[#00ff00]/20">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Valor a pagar</p>
+                    <p className="text-2xl font-black text-[#00ff00] mt-1">R$ {finalTotal.toFixed(2).replace('.', ',')}</p>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <Icon icon="simple-icons:pix" className="text-4xl text-[#32BCAD]" />
+                </div>
 
-            <button onClick={() => router.push('/rastreamento')}
-              className="w-full py-4 bg-white text-black font-black uppercase tracking-widest text-sm rounded-2xl hover:bg-zinc-200 transition-all">
-              Ver Meus Pedidos →
-            </button>
+                <div className="mx-auto w-fit bg-white p-3 rounded-2xl shadow-[0_0_40px_rgba(0,255,0,0.2)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pixCode)}`}
+                    alt="QR Code Pix"
+                    width={220}
+                    height={220}
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <div className="flex items-center justify-center gap-2 text-amber-400">
+                  <Icon icon="lucide:clock" className="text-sm" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Válido por 30 minutos</span>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pix Copia e Cola</p>
+                  <div className="flex gap-2">
+                    <input readOnly value={pixCode}
+                      className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-[10px] text-zinc-400 font-mono outline-none truncate" />
+                    <button onClick={handleCopyPix}
+                      className="shrink-0 px-4 py-3 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-xl text-[#00ff00] hover:bg-[#00ff00]/20 transition-all cursor-pointer flex items-center gap-2">
+                      <Icon icon={pixCopied ? 'lucide:check' : 'lucide:copy'} className="text-base" />
+                      <span className="text-[10px] font-black uppercase">{pixCopied ? 'Copiado!' : 'Copiar'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-left space-y-2 p-4 bg-black/40 rounded-2xl border border-white/5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Como pagar:</p>
+                  {['Abra o app do seu banco', 'Vá em Pix → Ler QR Code', 'Escaneie o código acima', 'Confirme o pagamento'].map((step, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="w-5 h-5 rounded-full bg-[#00ff00]/20 text-[#00ff00] text-[9px] font-black flex items-center justify-center shrink-0">{i + 1}</div>
+                      <p className="text-[10px] text-zinc-400 font-bold">{step}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Cartão — tela de agradecimento */
+              <div className="bg-zinc-900 border border-[#00f3ff]/20 rounded-[32px] p-8 space-y-6 text-left">
+                <div className="flex items-center gap-4 p-4 bg-[#00f3ff]/5 rounded-2xl border border-[#00f3ff]/20">
+                  <Icon icon="lucide:credit-card" className="text-3xl text-[#00f3ff] shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pagamento</p>
+                    <p className="text-sm font-black text-white mt-0.5">Cartão de Crédito — Em análise</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { icon: 'lucide:package', label: 'Produção iniciada em até 24h', color: '#00f3ff' },
+                    { icon: 'lucide:bell', label: 'Você receberá atualizações por email', color: '#ff00ff' },
+                    { icon: 'lucide:truck', label: 'Rastreamento disponível após envio', color: '#00ff00' },
+                  ].map(({ icon, label, color }) => (
+                    <div key={label} className="flex items-center gap-3">
+                      <Icon icon={icon} className="text-xl shrink-0" style={{ color }} />
+                      <p className="text-xs font-bold text-zinc-300">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 bg-[#ff00ff]/5 rounded-2xl border border-[#ff00ff]/20 text-center">
+                  <p className="text-xs font-black text-[#ff00ff] uppercase tracking-widest mb-1">Volte Sempre!</p>
+                  <p className="text-[10px] text-zinc-400">Obrigado por escolher a Balu 3D. Cada peça é feita com carinho especialmente para você.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button onClick={() => router.push('/rastreamento')}
+                className="flex-1 py-4 bg-white text-black font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-zinc-200 transition-all">
+                Ver Meus Pedidos →
+              </button>
+              <button onClick={() => router.push('/produtos')}
+                className="flex-1 py-4 bg-zinc-900 border border-white/10 text-white font-black uppercase tracking-widest text-xs rounded-2xl hover:border-[#00f3ff] transition-all">
+                Continuar Comprando
+              </button>
+            </div>
           </div>
         </main>
         <Footer />
