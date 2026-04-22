@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Icon } from '@iconify/react'
 import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
@@ -15,6 +15,17 @@ export default function Navbar() {
   const { count } = useCart()
   const [menuOpen, setMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    if (userMenuOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [userMenuOpen])
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
 
@@ -68,7 +79,7 @@ export default function Navbar() {
             <>
               {user ? (
                 /* Usuário logado */
-                <div className="hidden sm:block relative">
+                <div ref={userMenuRef} className="hidden sm:block relative">
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                     className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-white/10 rounded-full hover:border-[#00f3ff] transition-all cursor-pointer"
@@ -83,7 +94,7 @@ export default function Navbar() {
                   </button>
                   {userMenuOpen && (
                     <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-50">
-                      <Link href="/rastreamento" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors">
+                      <Link href="/minha-conta" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors">
                         <Icon icon="lucide:package" className="text-[#00f3ff]" /> Meus Pedidos
                       </Link>
                       <Link href="/minha-conta" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors">

@@ -136,7 +136,7 @@ function RastreamentoInner() {
   }
 
   async function doSearch(query: string) {
-    const normalized = query.trim().toUpperCase()
+    const normalized = query.trim()
     if (!normalized) return
     setLoading(true)
     setSearched(false)
@@ -231,7 +231,7 @@ function RastreamentoInner() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="BLU-00000 ou ID do pedido"
+                  placeholder="Cole o ID do pedido aqui"
                   className="w-full bg-zinc-900 border border-white/10 text-white pl-11 pr-4 py-4 rounded-2xl text-sm font-black uppercase placeholder:text-zinc-600 placeholder:normal-case placeholder:font-normal focus:outline-none focus:border-[#00f3ff] transition-colors"
                 />
               </div>

@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { Icon } from '@iconify/react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
-import { getFirestoreProducts } from '@/lib/db'
+import { getFirestoreProducts, getCarousel } from '@/lib/db'
 
 const WA_URL = `https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP ?? '5511999999999'}`
 
@@ -26,7 +26,7 @@ const faqs = [
   { q: 'Qual o tempo de entrega?', a: 'O prazo de produção é de 3 a 5 dias úteis. O tempo de transporte varia entre 2 a 7 dias dependendo da sua localização.' },
 ]
 
-const slides = [
+const HARDCODED_SLIDES = [
   {
     badge: 'PREMIUM EDITION',
     badgeColor: '#00f3ff',
@@ -94,17 +94,22 @@ export default function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [products, setProducts] = useState<Product[]>([])
+  const [slides, setSlides] = useState(HARDCODED_SLIDES)
+
+  useEffect(() => {
+    getCarousel().then((data) => { if (data.slides.length > 0) setSlides(data.slides as unknown as typeof HARDCODED_SLIDES) })
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length)
     }, 5000)
     return () => clearInterval(timer)
-  }, [])
+  }, [slides.length])
 
   useEffect(() => {
     getFirestoreProducts()
-      .then((all) => setProducts((all as Product[]).filter((p) => p.visible)))
+      .then((all) => setProducts((all as Product[]).filter((p) => p.visible !== false)))
       .catch(() => {})
   }, [])
 

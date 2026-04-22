@@ -12,6 +12,7 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  increment,
 } from 'firebase/firestore'
 import { db } from './firebase'
 
@@ -461,12 +462,14 @@ export async function deleteCoupon(code: string): Promise<void> {
 }
 
 export async function validateCoupon(code: string): Promise<Coupon | null> {
-  const snap = await getDoc(doc(db, 'coupons', code.toUpperCase()))
+  const couponRef = doc(db, 'coupons', code.toUpperCase())
+  const snap = await getDoc(couponRef)
   if (!snap.exists()) return null
   const c = { code: snap.id, ...snap.data() } as Coupon
   if (!c.active) return null
   if (c.expiresAt && new Date(c.expiresAt) < new Date()) return null
   if (c.usageLimit != null && (c.usageCount ?? 0) >= c.usageLimit) return null
+  await updateDoc(couponRef, { usageCount: increment(1) })
   return c
 }
 

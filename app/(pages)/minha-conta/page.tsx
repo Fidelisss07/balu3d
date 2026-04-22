@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Icon } from '@iconify/react'
 import { signOut, updateProfile } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { doc, updateDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 import { useAuth } from '@/context/AuthContext'
 import { getOrdersByUser, type Order } from '@/lib/db'
 import Navbar from '@/components/Navbar'
@@ -93,6 +94,7 @@ export default function MinhaContaPage() {
     setNameSaving(true)
     try {
       await updateProfile(user, { displayName: trimmed })
+      await updateDoc(doc(db, 'users', user.uid), { name: trimmed })
       setNameMsg({ type: 'ok', text: 'Nome atualizado!' })
       setEditingName(false)
     } catch {

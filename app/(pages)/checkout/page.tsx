@@ -630,7 +630,7 @@ export default function CheckoutPage() {
                           className="w-full bg-zinc-900/50 border-2 border-white/5 rounded-2xl px-6 py-4 text-white outline-none focus:border-[#00ff00] transition-all appearance-none cursor-pointer">
                           {[1,2,3,4,5,6].map((n) => (
                             <option key={n} value={n}>
-                              {n}x de R$ {(orderTotal / n).toFixed(2).replace('.', ',')} {n === 1 ? '(sem juros)' : ''}
+                              {n}x de R$ {(finalTotal / n).toFixed(2).replace('.', ',')} {n === 1 ? '(sem juros)' : ''}
                             </option>
                           ))}
                         </select>
@@ -705,7 +705,7 @@ export default function CheckoutPage() {
                     {payMethod === 'credito' && parseInt(form.installments) > 1 && (
                       <div className="flex justify-between text-xs font-bold uppercase text-zinc-500">
                         <span>Parcelamento</span>
-                        <span>{form.installments}x de R$ {(orderTotal / parseInt(form.installments)).toFixed(2).replace('.', ',')}</span>
+                        <span>{form.installments}x de R$ {(finalTotal / parseInt(form.installments)).toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
                     {couponResult && (
