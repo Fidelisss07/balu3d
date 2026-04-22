@@ -97,7 +97,7 @@ export default function HomePage() {
   const [slides, setSlides] = useState(HARDCODED_SLIDES)
 
   useEffect(() => {
-    getCarousel().then((data) => { if (data.slides.length > 0) setSlides(data.slides as unknown as typeof HARDCODED_SLIDES) })
+    getCarousel().catch(() => {})
   }, [])
 
   useEffect(() => {
