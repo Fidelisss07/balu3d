@@ -34,45 +34,6 @@ interface Order {
   events: TrackingEvent[]
 }
 
-// ─── pedidos mock de demonstração ────────────────────────────────────────────
-
-const ORDERS: Record<string, Order> = {
-  'BLU-98421': {
-    id: 'BLU-98421',
-    status: 'transito',
-    carrier: 'Correios PAC',
-    trackingCode: 'BLU9842100X',
-    address: 'Rua dos Gamers, 1337 • Apto 404\nBairro Printverso • São Paulo, SP\n01234-567',
-    estimatedDelivery: '16 Abr, 2026',
-    items: [
-      { name: 'Charizard — Ed. Limitada', detail: 'Qtd: 1 • Resina 8K', color: '#ff6b35' },
-      { name: 'Mewtwo Shiny', detail: 'Qtd: 1 • Resina 8K', color: '#00f3ff' },
-    ],
-    events: [
-      { date: 'Hoje, 08:32', title: 'Em rota para o cliente', subtitle: 'Motorista: Carlos R.', detail: 'O pacote saiu do centro logístico e está no veículo de entrega final.' },
-      { date: 'Ontem, 21:50', title: 'Triagem Hub Logístico Sul', subtitle: 'Guarulhos – SP' },
-      { date: 'Ontem, 14:15', title: 'Postado pela Balu 3D', subtitle: 'Balu 3D Matriz — São Paulo, SP' },
-      { date: '13 Abr, 14:15', title: 'Impressão finalizada e embalado', subtitle: 'Controle de qualidade: aprovado ✓' },
-      { date: '12 Abr, 09:42', title: 'Pedido confirmado e pago', subtitle: 'Entrou na fila de impressão' },
-    ],
-  },
-  'BLU-77010': {
-    id: 'BLU-77010',
-    status: 'impressao',
-    carrier: 'Correios SEDEX',
-    trackingCode: 'Ainda não disponível',
-    address: 'Av. Nerd, 42 • Bloco B\nVila Pixel • Rio de Janeiro, RJ\n22041-001',
-    estimatedDelivery: '19 Abr, 2026',
-    items: [
-      { name: 'Kratos God of War', detail: 'Qtd: 1 • Ed. Exclusiva', color: '#ff00ff' },
-    ],
-    events: [
-      { date: 'Hoje, 10:05', title: 'Impressão 3D em andamento', subtitle: 'Camada 142 / 280 — ~6h restantes', detail: 'Seu item está sendo impresso em resina 8K.' },
-      { date: '13 Abr, 18:00', title: 'Pedido confirmado e pago', subtitle: 'Entrou na fila de impressão' },
-    ],
-  },
-}
-
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 const STATUS_STEPS: { key: OrderStatus; icon: string; label: string }[] = [
@@ -221,14 +182,10 @@ function RastreamentoInner() {
         return
       }
     } catch {
-      // Firestore falhou — tenta mock abaixo
-    }
-
-    setTimeout(() => {
-      setOrder(ORDERS[normalized] ?? null)
+      setOrder(null)
       setSearched(true)
       setLoading(false)
-    }, 400)
+    }
   }
 
   async function handleSearch(e: React.FormEvent) {
@@ -292,9 +249,6 @@ function RastreamentoInner() {
               </button>
             </form>
 
-            <p className="text-zinc-600 text-xs mt-4 font-bold">
-              Pedidos de teste: BLU-98421 · BLU-77010
-            </p>
           </div>
         </section>
 

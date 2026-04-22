@@ -306,8 +306,22 @@ export default function AdminPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
   // Pedidos — filtros
+  const [searchOrderInput, setSearchOrderInput] = useState('')
   const [searchOrder, setSearchOrder] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('todos')
+  const [ordersPage, setOrdersPage] = useState(0)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleOrderSearch = (value: string) => {
+    setSearchOrderInput(value)
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(() => {
+      setSearchOrder(value)
+      setOrdersPage(0)
+    }, 300)
+  }
+
+  const ORDERS_PER_PAGE = 20
 
   // Clientes — filtros + role change
   const [searchUser, setSearchUser] = useState('')
@@ -354,6 +368,9 @@ export default function AdminPage() {
   // Relatório
   const [relPeriod, setRelPeriod] = useState<7 | 30 | 90>(30)
 
+  // Erro global de carregamento
+  const [loadError, setLoadError] = useState<string | null>(null)
+
   // Kanban — drag
   const dragOrderId = useRef<string | null>(null)
 
@@ -370,13 +387,18 @@ export default function AdminPage() {
     async function load() {
       setDataLoading(true)
       setFsLoading(true)
-      const [ordersData, usersData, productsData, configData] = await Promise.all([getAllOrders(), getAllUsers(), getFirestoreProducts(), getSiteConfig()])
-      setOrders(ordersData)
-      setUsers(usersData)
-      setFsProducts(productsData as FirestoreProduct[])
-      setSiteConfig(configData)
-      setDataLoading(false)
-      setFsLoading(false)
+      try {
+        const [ordersData, usersData, productsData, configData] = await Promise.all([getAllOrders(), getAllUsers(), getFirestoreProducts(), getSiteConfig()])
+        setOrders(ordersData)
+        setUsers(usersData)
+        setFsProducts(productsData as FirestoreProduct[])
+        setSiteConfig(configData)
+      } catch {
+        setLoadError('Erro ao carregar dados. Recarregue a página.')
+      } finally {
+        setDataLoading(false)
+        setFsLoading(false)
+      }
     }
     load()
   }, [profile])
@@ -555,23 +577,36 @@ export default function AdminPage() {
   async function handleSaveCoupon() {
     const code = couponForm.code.trim().toUpperCase()
     const discount = Number(couponForm.discount)
-    if (!code || !discount || discount <= 0 || discount > 100) {
-      setCouponMsg('Preencha código e desconto válido (1-100%).')
+    if (couponForm.code.trim() === '') {
+      setCouponMsg('Código do cupom não pode ser vazio.')
+      return
+    }
+    if (!discount || discount <= 0) {
+      setCouponMsg('Desconto deve ser maior que zero.')
+      return
+    }
+    if (discount > 100) {
+      setCouponMsg('Desconto não pode ser maior que 100%.')
       return
     }
     setCouponSaving(true)
-    await upsertCoupon({
-      code,
-      discount,
-      active: couponForm.active,
-      expiresAt: couponForm.expiresAt || undefined,
-      usageLimit: couponForm.usageLimit ? Number(couponForm.usageLimit) : undefined,
-    })
-    setCouponForm({ code: '', discount: '', active: true, expiresAt: '', usageLimit: '' })
-    setCouponMsg(`Cupom ${code} salvo!`)
-    await loadCoupons()
-    setCouponSaving(false)
-    setTimeout(() => setCouponMsg(''), 3000)
+    try {
+      await upsertCoupon({
+        code,
+        discount,
+        active: couponForm.active,
+        expiresAt: couponForm.expiresAt || undefined,
+        usageLimit: couponForm.usageLimit ? Number(couponForm.usageLimit) : undefined,
+      })
+      setCouponForm({ code: '', discount: '', active: true, expiresAt: '', usageLimit: '' })
+      setCouponMsg(`Cupom ${code} salvo!`)
+      await loadCoupons()
+      setTimeout(() => setCouponMsg(''), 3000)
+    } catch {
+      setCouponMsg('Erro ao salvar cupom. Tente novamente.')
+    } finally {
+      setCouponSaving(false)
+    }
   }
 
   async function handleDeleteCoupon(code: string) {
@@ -651,6 +686,7 @@ export default function AdminPage() {
     const matchStatus = filterStatus === 'todos' || o.status === filterStatus
     return matchSearch && matchStatus
   })
+  const pagedOrders = filteredOrders.slice(ordersPage * ORDERS_PER_PAGE, (ordersPage + 1) * ORDERS_PER_PAGE)
 
   // ── Filtered users
   const filteredUsers = users.filter((u) =>
@@ -726,6 +762,12 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0a0a] bg-grid-dark">
       <Navbar />
+
+      {loadError && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-red-900/90 border border-red-500/50 rounded-2xl text-red-300 text-xs font-black uppercase tracking-widest backdrop-blur-xl shadow-lg">
+          {loadError}
+        </div>
+      )}
 
       {selectedOrder && (
         <OrderDetailModal
@@ -971,8 +1013,8 @@ export default function AdminPage() {
                       <input
                         type="text"
                         placeholder="Buscar por nome, email ou ID..."
-                        value={searchOrder}
-                        onChange={(e) => setSearchOrder(e.target.value)}
+                        value={searchOrderInput}
+                        onChange={(e) => handleOrderSearch(e.target.value)}
                         className="bg-zinc-900 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-[#00f3ff] placeholder:text-zinc-600 w-64"
                       />
                     </div>
@@ -998,7 +1040,7 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {filteredOrders.map((order) => (
+                    {pagedOrders.map((order) => (
                       <div key={order.id} className="bg-black border border-zinc-800 rounded-[28px] p-6 hover:border-zinc-600 transition-all">
                         <div className="flex flex-col md:flex-row md:items-center gap-4">
                           <div className="flex-1 min-w-0">
@@ -1038,6 +1080,17 @@ export default function AdminPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+                {filteredOrders.length > 0 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <span className="text-xs text-zinc-500">
+                      Mostrando {ordersPage * ORDERS_PER_PAGE + 1}–{Math.min((ordersPage + 1) * ORDERS_PER_PAGE, filteredOrders.length)} de {filteredOrders.length}
+                    </span>
+                    <div className="flex gap-2">
+                      <button disabled={ordersPage === 0} onClick={() => setOrdersPage(p => p - 1)} className="px-3 py-1 text-xs rounded-lg bg-zinc-800 text-white disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">Anterior</button>
+                      <button disabled={(ordersPage + 1) * ORDERS_PER_PAGE >= filteredOrders.length} onClick={() => setOrdersPage(p => p + 1)} className="px-3 py-1 text-xs rounded-lg bg-zinc-800 text-white disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">Próximo</button>
+                    </div>
                   </div>
                 )}
               </>

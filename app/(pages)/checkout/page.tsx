@@ -8,7 +8,7 @@ import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
-import { createOrder, getSiteConfig, type SiteConfig } from '@/lib/db'
+import { createOrder, validateCoupon, getSiteConfig, type SiteConfig, type Coupon } from '@/lib/db'
 import { logger } from '@/lib/logger'
 
 const SHIPPING_OPTIONS = [
@@ -64,6 +64,12 @@ export default function CheckoutPage() {
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState('')
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
+  const [couponCode, setCouponCode] = useState('')
+  const [couponResult, setCouponResult] = useState<Coupon | null>(null)
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [orderId, setOrderId] = useState<string | null>(null)
+  const [orderError, setOrderError] = useState<string | null>(null)
 
   const [form, setForm] = useState<FormState>({
     name: user?.displayName ?? '',
@@ -90,9 +96,29 @@ export default function CheckoutPage() {
   const shippingOption = SHIPPING_OPTIONS.find((o) => o.id === shipping)!
   const shippingCost = shippingOption.price
   const orderTotal = total + shippingCost
+  const couponDiscount = couponResult ? orderTotal * (couponResult.discount / 100) : 0
+  const orderTotalAfterCoupon = orderTotal - couponDiscount
   const pixDiscountPct = siteConfig?.pixDiscount ?? 5
-  const pixDiscount = payMethod === 'pix' ? orderTotal * (pixDiscountPct / 100) : 0
-  const finalTotal = orderTotal - pixDiscount
+  const pixDiscount = payMethod === 'pix' ? orderTotalAfterCoupon * (pixDiscountPct / 100) : 0
+  const finalTotal = orderTotalAfterCoupon - pixDiscount
+
+  async function applyCoupon() {
+    if (!couponCode.trim()) return
+    setCouponLoading(true)
+    setCouponError(null)
+    setCouponResult(null)
+    try {
+      const result = await validateCoupon(couponCode.trim())
+      if (result) {
+        setCouponResult(result)
+      } else {
+        setCouponError('Cupom inválido ou expirado.')
+      }
+    } catch {
+      setCouponError('Erro ao validar cupom.')
+    }
+    setCouponLoading(false)
+  }
 
   function generatePixCode(amount: number): string {
     const pixKey = siteConfig?.storeEmail ?? 'contato@balu3d.com.br'
@@ -185,8 +211,9 @@ export default function CheckoutPage() {
     if (items.length === 0) return
     if (!validate()) return
     setSubmitting(true)
+    setOrderError(null)
     try {
-      await createOrder({
+      const newOrderId = await createOrder({
         userId: user?.uid ?? 'guest',
         userName: form.name,
         userEmail: form.email,
@@ -207,6 +234,7 @@ export default function CheckoutPage() {
         },
         status: 'confirmado',
       })
+      setOrderId(newOrderId)
       await clear()
       setOrderMethod(payMethod)
       if (payMethod === 'pix') {
@@ -216,7 +244,7 @@ export default function CheckoutPage() {
       }
     } catch (err) {
       logger.error(err)
-      alert('Erro ao finalizar pedido. Tente novamente.')
+      setOrderError('Erro ao finalizar pedido. Tente novamente.')
     }
     setSubmitting(false)
   }
@@ -276,6 +304,11 @@ export default function CheckoutPage() {
               <h1 className="text-4xl font-black uppercase tracking-tighter text-white mb-3">
                 {isPix ? 'Pedido Confirmado!' : 'Obrigado pela Compra!'}
               </h1>
+              {orderId && (
+                <p className="text-[#00f3ff] font-black uppercase tracking-widest text-sm mb-3">
+                  Pedido #{orderId}
+                </p>
+              )}
               <p className="text-zinc-400 text-sm leading-relaxed">
                 {isPix
                   ? 'Escaneie o QR Code abaixo ou copie o código Pix para concluir o pagamento.'
@@ -675,6 +708,12 @@ export default function CheckoutPage() {
                         <span>{form.installments}x de R$ {(orderTotal / parseInt(form.installments)).toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
+                    {couponResult && (
+                      <div className="flex justify-between text-xs font-bold uppercase">
+                        <span className="text-[#00ff00]">Cupom ({couponResult.code}) -{couponResult.discount}%</span>
+                        <span className="text-[#00ff00]">- R$ {couponDiscount.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
                     {payMethod === 'pix' && (
                       <div className="flex justify-between text-xs font-bold uppercase">
                         <span className="text-[#00ff00]">Desconto Pix ({pixDiscountPct}%)</span>
@@ -685,6 +724,29 @@ export default function CheckoutPage() {
                       <span className="text-xs font-black uppercase text-white">Total</span>
                       <span className="text-3xl font-black text-white">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
                     </div>
+                  </div>
+
+                  {/* Cupom */}
+                  <div className="space-y-2 pt-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Cupom de Desconto</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="CÓDIGO"
+                        value={couponCode}
+                        onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(null); setCouponResult(null) }}
+                        className="flex-1 bg-black/40 border-2 border-white/5 rounded-xl px-4 py-3 text-white placeholder:text-zinc-700 outline-none transition-all text-xs font-mono focus:border-[#00f3ff] uppercase"
+                      />
+                      <button
+                        onClick={applyCoupon}
+                        disabled={couponLoading || !couponCode.trim()}
+                        className="shrink-0 px-4 py-3 bg-[#00f3ff]/10 border border-[#00f3ff]/30 rounded-xl text-[#00f3ff] hover:bg-[#00f3ff]/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase"
+                      >
+                        {couponLoading ? '...' : 'Aplicar'}
+                      </button>
+                    </div>
+                    {couponError && <p className="text-red-400 text-[10px] font-bold">{couponError}</p>}
+                    {couponResult && <p className="text-[#00ff00] text-[10px] font-bold">Cupom aplicado! -{couponResult.discount}% de desconto.</p>}
                   </div>
 
                   {/* CTA */}
@@ -708,6 +770,8 @@ export default function CheckoutPage() {
                       )}
                     </div>
                   </button>
+
+                  {orderError && <p className="text-red-400 text-sm font-bold mt-2">{orderError}</p>}
 
                   {/* Payment icons */}
                   <div className="flex justify-center gap-4 pt-2">
