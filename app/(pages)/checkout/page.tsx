@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Icon } from '@iconify/react'
+import { loadStripe } from '@stripe/stripe-js'
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { useCart } from '@/context/CartContext'
@@ -11,10 +13,12 @@ import { useAuth } from '@/context/AuthContext'
 import { createOrder, validateCoupon, getSiteConfig, type SiteConfig, type Coupon } from '@/lib/db'
 import { logger } from '@/lib/logger'
 
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+
 const SHIPPING_OPTIONS = [
-  { id: 'pac',       icon: 'lucide:truck',  label: 'PAC',       desc: '8-12 Dias Úteis', price: 0,  priceLabel: 'Grátis',    color: '#00f3ff' },
-  { id: 'sedex',     icon: 'lucide:zap',    label: 'SEDEX',     desc: '3-5 Dias Úteis',  price: 25, priceLabel: 'R$ 25,00',  color: '#ff00ff' },
-  { id: 'sedex10',   icon: 'lucide:rocket', label: 'SEDEX 10',  desc: 'Próximo Dia',     price: 50, priceLabel: 'R$ 50,00',  color: '#00ff00' },
+  { id: 'pac',     icon: 'lucide:truck',  label: 'PAC',      desc: '8-12 Dias Úteis', price: 0,  priceLabel: 'Grátis',   color: '#00f3ff' },
+  { id: 'sedex',   icon: 'lucide:zap',    label: 'SEDEX',    desc: '3-5 Dias Úteis',  price: 25, priceLabel: 'R$ 25,00', color: '#ff00ff' },
+  { id: 'sedex10', icon: 'lucide:rocket', label: 'SEDEX 10', desc: 'Próximo Dia',      price: 50, priceLabel: 'R$ 50,00', color: '#00ff00' },
 ]
 
 type PayMethod = 'credito' | 'pix'
@@ -29,60 +33,52 @@ interface FormState {
   bairro: string
   city: string
   state: string
-  // cartão
-  cardName: string
-  cardNumber: string
-  cardExpiry: string
-  cardCvv: string
-  // parcelamento
   installments: string
 }
 
 function formatCEP(v: string) {
   return v.replace(/\D/g, '').slice(0, 8).replace(/^(\d{5})(\d)/, '$1-$2')
 }
-function formatCard(v: string) {
-  return v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim()
-}
-function formatExpiry(v: string) {
-  return v.replace(/\D/g, '').slice(0, 4).replace(/^(\d{2})(\d)/, '$1/$2')
-}
 
-export default function CheckoutPage() {
+// ─── Inner checkout form (needs Stripe context) ───────────────────────────────
+function CheckoutForm() {
   const router = useRouter()
   const { items, total, clear, loading: cartLoading } = useCart()
   const { user } = useAuth()
+  const stripe = useStripe()
+  const elements = useElements()
 
   const [shipping, setShipping] = useState('pac')
   const [payMethod, setPayMethod] = useState<PayMethod>('credito')
   const [submitting, setSubmitting] = useState(false)
   const [orderDone, setOrderDone] = useState(false)
   const [orderMethod, setOrderMethod] = useState<PayMethod>('pix')
+  const [pixQrUrl, setPixQrUrl] = useState('')
   const [pixCode, setPixCode] = useState('')
   const [pixCopied, setPixCopied] = useState(false)
   const [siteConfig, setSiteConfig] = useState<SiteConfig | null>(null)
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState('')
-  const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
+  const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'card', string>>>({})
   const [couponCode, setCouponCode] = useState('')
   const [couponResult, setCouponResult] = useState<Coupon | null>(null)
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponError, setCouponError] = useState<string | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [orderError, setOrderError] = useState<string | null>(null)
+  const orderIdRef = useRef<string | null>(null)
 
   const [form, setForm] = useState<FormState>({
     name: user?.displayName ?? '',
     email: user?.email ?? '',
     cep: '', logradouro: '', numero: '', complemento: '', bairro: '', city: '', state: '',
-    cardName: '', cardNumber: '', cardExpiry: '', cardCvv: '', installments: '1',
+    installments: '1',
   })
 
   useEffect(() => {
     getSiteConfig().then(setSiteConfig).catch(() => {})
   }, [])
 
-  // Pré-preenche nome/email quando user carrega
   useEffect(() => {
     if (user) {
       setForm((f) => ({
@@ -120,30 +116,14 @@ export default function CheckoutPage() {
     setCouponLoading(false)
   }
 
-  function generatePixCode(amount: number): string {
-    const pixKey = siteConfig?.storeEmail ?? 'contato@balu3d.com.br'
-    const name = (siteConfig?.storeName ?? 'BALU 3D').toUpperCase().slice(0, 25)
-    const base = `00020126580014BR.GOV.BCB.PIX0136${pixKey}5204000053039865802BR5913${name}6009SAO PAULO62070503***6304`
-    return base + amount.toFixed(2).replace('.', '')
-  }
-
-  function generateAndShowPix() {
-    const code = generatePixCode(finalTotal)
-    setPixCode(code)
-    setOrderDone(true)
-  }
-
   async function handleCopyPix() {
     try {
       await navigator.clipboard.writeText(pixCode)
       setPixCopied(true)
       setTimeout(() => setPixCopied(false), 2000)
-    } catch {
-      // fallback silencioso
-    }
+    } catch { /* fallback silencioso */ }
   }
 
-  // CEP lookup
   const handleCEP = useCallback(async (raw: string) => {
     const cep = raw.replace(/\D/g, '')
     if (cep.length !== 8) return
@@ -169,42 +149,54 @@ export default function CheckoutPage() {
     setCepLoading(false)
   }, [])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     let v = value
     if (name === 'cep') { v = formatCEP(value); handleCEP(v) }
-    if (name === 'cardNumber') v = formatCard(value)
-    if (name === 'cardExpiry') v = formatExpiry(value)
-    if (name === 'cardCvv') v = value.replace(/\D/g, '').slice(0, 4)
     setForm((f) => ({ ...f, [name]: v }))
-    if (errors[name as keyof FormState]) setErrors((e) => ({ ...e, [name]: '' }))
+    if (errors[name as keyof FormState]) setErrors((er) => ({ ...er, [name]: '' }))
   }
 
   const validate = () => {
-    const e: Partial<Record<keyof FormState, string>> = {}
+    const e: Partial<Record<keyof FormState | 'card', string>> = {}
     if (!form.name.trim()) e.name = 'Nome obrigatório'
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email inválido'
     if (form.cep.replace(/\D/g, '').length !== 8) e.cep = 'CEP inválido'
     if (!form.logradouro.trim()) e.logradouro = 'Rua obrigatória'
     if (!form.numero.trim()) e.numero = 'Número obrigatório'
     if (!form.city.trim()) e.city = 'Cidade obrigatória'
-    if (payMethod === 'credito') {
-      if (form.cardNumber.replace(/\s/g, '').length < 16) e.cardNumber = 'Número inválido'
-      if (!form.cardName.trim()) e.cardName = 'Nome obrigatório'
-      if (form.cardExpiry.length < 5) e.cardExpiry = 'Validade inválida'
-      if (form.cardCvv.length < 3) e.cardCvv = 'CVV inválido'
-    }
     setErrors(e)
     if (Object.keys(e).length > 0) {
-      // Scrolla até o primeiro campo com erro
       const firstKey = Object.keys(e)[0]
       const el = document.querySelector(`[name="${firstKey}"]`) as HTMLElement | null
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        el.focus()
-      }
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus() }
     }
     return Object.keys(e).length === 0
+  }
+
+  // Cria o pedido no Firestore e retorna o ID
+  async function createFirestoreOrder(status: 'confirmado' | 'impressao' | 'transito' | 'entregue' | 'cancelado') {
+    return createOrder({
+      userId: user?.uid ?? 'guest',
+      userName: form.name,
+      userEmail: form.email,
+      items,
+      subtotal: total,
+      shipping: shippingCost,
+      total: finalTotal,
+      shippingMethod: shipping,
+      paymentMethod: payMethod,
+      address: {
+        name: form.name,
+        email: form.email,
+        cep: form.cep,
+        logradouro: `${form.logradouro}${form.numero ? ', ' + form.numero : ''}${form.complemento ? ' - ' + form.complemento : ''}`,
+        bairro: form.bairro,
+        city: form.city,
+        state: form.state,
+      },
+      status,
+    })
   }
 
   const handleSubmit = async () => {
@@ -212,39 +204,66 @@ export default function CheckoutPage() {
     if (!validate()) return
     setSubmitting(true)
     setOrderError(null)
+
     try {
-      const newOrderId = await createOrder({
-        userId: user?.uid ?? 'guest',
-        userName: form.name,
-        userEmail: form.email,
-        items,
-        subtotal: total,
-        shipping: shippingCost,
-        total: finalTotal,
-        shippingMethod: shipping,
-        paymentMethod: payMethod,
-        address: {
-          name: form.name,
-          email: form.email,
-          cep: form.cep,
-          logradouro: `${form.logradouro}${form.numero ? ', ' + form.numero : ''}${form.complemento ? ' - ' + form.complemento : ''}`,
-          bairro: form.bairro,
-          city: form.city,
-          state: form.state,
-        },
-        status: 'confirmado',
-      })
-      setOrderId(newOrderId)
-      await clear()
-      setOrderMethod(payMethod)
       if (payMethod === 'pix') {
-        generateAndShowPix()
+        // 1. Criar pedido pendente
+        const newOrderId = await createFirestoreOrder('confirmado')
+        orderIdRef.current = newOrderId
+        setOrderId(newOrderId)
+
+        // 2. Gerar PIX real via Stripe
+        const res = await fetch('/api/create-pix', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: finalTotal, orderId: newOrderId }),
+        })
+        const pixData = await res.json()
+        if (!res.ok) throw new Error(pixData.error ?? 'Erro ao gerar PIX')
+
+        setPixQrUrl(pixData.qrCode ?? '')
+        setPixCode(pixData.qrCodeText ?? '')
+        await clear()
+        setOrderMethod('pix')
+        setOrderDone(true)
+
       } else {
+        // Cartão — Stripe Elements
+        if (!stripe || !elements) throw new Error('Stripe não carregou')
+        const cardElement = elements.getElement(CardElement)
+        if (!cardElement) throw new Error('Elemento de cartão não encontrado')
+
+        // 1. Criar pedido pendente
+        const newOrderId = await createFirestoreOrder('confirmado')
+        orderIdRef.current = newOrderId
+        setOrderId(newOrderId)
+
+        // 2. Criar PaymentIntent server-side
+        const intentRes = await fetch('/api/create-payment-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: finalTotal, orderId: newOrderId }),
+        })
+        const intentData = await intentRes.json()
+        if (!intentRes.ok) throw new Error(intentData.error ?? 'Erro ao iniciar pagamento')
+
+        // 3. Confirmar pagamento com os dados do cartão
+        const { error: stripeError } = await stripe.confirmCardPayment(intentData.clientSecret, {
+          payment_method: {
+            card: cardElement,
+            billing_details: { name: form.name, email: form.email },
+          },
+        })
+        if (stripeError) throw new Error(stripeError.message ?? 'Pagamento recusado')
+
+        // 4. Sucesso — webhook atualizará o status para 'pago' automaticamente
+        await clear()
+        setOrderMethod('credito')
         setOrderDone(true)
       }
     } catch (err) {
       logger.error(err)
-      setOrderError('Erro ao finalizar pedido. Tente novamente.')
+      setOrderError(err instanceof Error ? err.message : 'Erro ao finalizar pedido. Tente novamente.')
     }
     setSubmitting(false)
   }
@@ -265,7 +284,7 @@ export default function CheckoutPage() {
     )
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !orderDone) {
     return (
       <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
         <Navbar />
@@ -290,8 +309,6 @@ export default function CheckoutPage() {
         <Navbar />
         <main className="flex-1 flex items-center justify-center px-4 py-24">
           <div className="w-full max-w-md text-center space-y-8">
-
-            {/* Ícone animado */}
             <div className="relative flex items-center justify-center">
               <div className="absolute w-32 h-32 rounded-full bg-[#00ff00]/10 animate-ping" />
               <div className="relative w-24 h-24 rounded-full bg-[#00ff00]/20 border-2 border-[#00ff00]/40 flex items-center justify-center">
@@ -299,7 +316,6 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* Título */}
             <div>
               <h1 className="text-4xl font-black uppercase tracking-tighter text-white mb-3">
                 {isPix ? 'Pedido Confirmado!' : 'Obrigado pela Compra!'}
@@ -312,7 +328,7 @@ export default function CheckoutPage() {
               <p className="text-zinc-400 text-sm leading-relaxed">
                 {isPix
                   ? 'Escaneie o QR Code abaixo ou copie o código Pix para concluir o pagamento.'
-                  : 'Seu pedido foi registrado com sucesso. Em breve nossa equipe entrará em contato para confirmar a produção.'}
+                  : 'Seu pagamento foi processado com sucesso! Em breve nossa equipe iniciará a produção.'}
               </p>
             </div>
 
@@ -326,34 +342,43 @@ export default function CheckoutPage() {
                   <Icon icon="simple-icons:pix" className="text-4xl text-[#32BCAD]" />
                 </div>
 
-                <div className="mx-auto w-fit bg-white p-3 rounded-2xl shadow-[0_0_40px_rgba(0,255,0,0.2)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pixCode)}`}
-                    alt="QR Code Pix"
-                    width={220}
-                    height={220}
-                    className="rounded-xl"
-                  />
-                </div>
+                {pixQrUrl ? (
+                  <div className="mx-auto w-fit bg-white p-3 rounded-2xl shadow-[0_0_40px_rgba(0,255,0,0.2)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={pixQrUrl} alt="QR Code Pix" width={220} height={220} className="rounded-xl" />
+                  </div>
+                ) : (
+                  <div className="mx-auto w-fit bg-white p-3 rounded-2xl shadow-[0_0_40px_rgba(0,255,0,0.2)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pixCode)}`}
+                      alt="QR Code Pix"
+                      width={220}
+                      height={220}
+                      className="rounded-xl"
+                    />
+                  </div>
+                )}
 
                 <div className="flex items-center justify-center gap-2 text-amber-400">
                   <Icon icon="lucide:clock" className="text-sm" />
                   <span className="text-[10px] font-black uppercase tracking-widest">Válido por 30 minutos</span>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pix Copia e Cola</p>
-                  <div className="flex gap-2">
-                    <input readOnly value={pixCode}
-                      className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-[10px] text-zinc-400 font-mono outline-none truncate" />
-                    <button onClick={handleCopyPix}
-                      className="shrink-0 px-4 py-3 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-xl text-[#00ff00] hover:bg-[#00ff00]/20 transition-all cursor-pointer flex items-center gap-2">
-                      <Icon icon={pixCopied ? 'lucide:check' : 'lucide:copy'} className="text-base" />
-                      <span className="text-[10px] font-black uppercase">{pixCopied ? 'Copiado!' : 'Copiar'}</span>
-                    </button>
+                {pixCode && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pix Copia e Cola</p>
+                    <div className="flex gap-2">
+                      <input readOnly value={pixCode}
+                        className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-[10px] text-zinc-400 font-mono outline-none truncate" />
+                      <button onClick={handleCopyPix}
+                        className="shrink-0 px-4 py-3 bg-[#00ff00]/10 border border-[#00ff00]/30 rounded-xl text-[#00ff00] hover:bg-[#00ff00]/20 transition-all cursor-pointer flex items-center gap-2">
+                        <Icon icon={pixCopied ? 'lucide:check' : 'lucide:copy'} className="text-base" />
+                        <span className="text-[10px] font-black uppercase">{pixCopied ? 'Copiado!' : 'Copiar'}</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="text-left space-y-2 p-4 bg-black/40 rounded-2xl border border-white/5">
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Como pagar:</p>
@@ -366,16 +391,14 @@ export default function CheckoutPage() {
                 </div>
               </div>
             ) : (
-              /* Cartão — tela de agradecimento */
               <div className="bg-zinc-900 border border-[#00f3ff]/20 rounded-[32px] p-8 space-y-6 text-left">
                 <div className="flex items-center gap-4 p-4 bg-[#00f3ff]/5 rounded-2xl border border-[#00f3ff]/20">
                   <Icon icon="lucide:credit-card" className="text-3xl text-[#00f3ff] shrink-0" />
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pagamento</p>
-                    <p className="text-sm font-black text-white mt-0.5">Cartão de Crédito — Em análise</p>
+                    <p className="text-sm font-black text-white mt-0.5">Cartão de Crédito — Aprovado</p>
                   </div>
                 </div>
-
                 <div className="space-y-3">
                   {[
                     { icon: 'lucide:package', label: 'Produção iniciada em até 24h', color: '#00f3ff' },
@@ -388,7 +411,6 @@ export default function CheckoutPage() {
                     </div>
                   ))}
                 </div>
-
                 <div className="p-4 bg-[#ff00ff]/5 rounded-2xl border border-[#ff00ff]/20 text-center">
                   <p className="text-xs font-black text-[#ff00ff] uppercase tracking-widest mb-1">Volte Sempre!</p>
                   <p className="text-[10px] text-zinc-400">Obrigado por escolher a Balu 3D. Cada peça é feita com carinho especialmente para você.</p>
@@ -397,7 +419,7 @@ export default function CheckoutPage() {
             )}
 
             <div className="flex flex-col sm:flex-row gap-3">
-              <button onClick={() => router.push('/rastreamento')}
+              <button onClick={() => router.push('/minha-conta')}
                 className="flex-1 py-4 bg-white text-black font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-zinc-200 transition-all">
                 Ver Meus Pedidos →
               </button>
@@ -416,15 +438,14 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen flex flex-col bg-grid-dark">
       <Navbar />
-
       <main className="flex-1 pt-28 pb-24 px-4 md:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
 
-            {/* ── LEFT: FORM ────────────────────────────────── */}
+            {/* ── LEFT: FORM ── */}
             <div className="flex-1 space-y-12">
 
-              {/* Steps indicator */}
+              {/* Steps */}
               <div className="flex items-center max-w-md mb-8">
                 {['Carrinho', 'Entrega', 'Pagamento'].map((step, i) => (
                   <div key={step} className="flex items-center flex-1 last:flex-none">
@@ -444,7 +465,7 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
-              {/* ── DADOS PESSOAIS ── */}
+              {/* DADOS PESSOAIS */}
               <section className="space-y-8">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-8 bg-[#00f3ff]" />
@@ -453,32 +474,28 @@ export default function CheckoutPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="col-span-full space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Nome Completo *</label>
-                    <input name="name" type="text" placeholder="Seu nome completo" value={form.name} onChange={handleChange}
-                      className={inputClass('name')} />
+                    <input name="name" type="text" placeholder="Seu nome completo" value={form.name} onChange={handleChange} className={inputClass('name')} />
                     {errors.name && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.name}</p>}
                   </div>
                   <div className="col-span-full space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Email *</label>
-                    <input name="email" type="email" placeholder="seu@email.com" value={form.email} onChange={handleChange}
-                      className={inputClass('email')} />
+                    <input name="email" type="email" placeholder="seu@email.com" value={form.email} onChange={handleChange} className={inputClass('email')} />
                     {errors.email && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.email}</p>}
                   </div>
                 </div>
               </section>
 
-              {/* ── ENDEREÇO ── */}
+              {/* ENDEREÇO */}
               <section className="space-y-8">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-8 bg-[#ff00ff]" />
                   <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter">Endereço de Entrega</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* CEP */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">CEP *</label>
                     <div className="relative">
-                      <input name="cep" type="text" placeholder="00000-000" value={form.cep} onChange={handleChange}
-                        className={inputClass('cep')} />
+                      <input name="cep" type="text" placeholder="00000-000" value={form.cep} onChange={handleChange} className={inputClass('cep')} />
                       {cepLoading && (
                         <div className="absolute right-5 top-1/2 -translate-y-1/2">
                           <div className="w-4 h-4 border-2 border-[#00f3ff] border-t-transparent rounded-full animate-spin" />
@@ -488,49 +505,37 @@ export default function CheckoutPage() {
                     {cepError && <p className="text-red-400 text-[10px] font-bold ml-4">{cepError}</p>}
                     {errors.cep && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.cep}</p>}
                   </div>
-                  {/* Bairro */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Bairro</label>
-                    <input name="bairro" type="text" placeholder="Seu bairro" value={form.bairro} onChange={handleChange}
-                      className={inputClass('bairro')} />
+                    <input name="bairro" type="text" placeholder="Seu bairro" value={form.bairro} onChange={handleChange} className={inputClass('bairro')} />
                   </div>
-                  {/* Rua */}
                   <div className="col-span-full space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Rua / Logradouro *</label>
-                    <input name="logradouro" type="text" placeholder="Rua das Impressões 3D" value={form.logradouro} onChange={handleChange}
-                      className={inputClass('logradouro')} />
+                    <input name="logradouro" type="text" placeholder="Rua das Impressões 3D" value={form.logradouro} onChange={handleChange} className={inputClass('logradouro')} />
                     {errors.logradouro && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.logradouro}</p>}
                   </div>
-                  {/* Número */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Número *</label>
-                    <input name="numero" type="text" placeholder="42" value={form.numero} onChange={handleChange}
-                      className={inputClass('numero')} />
+                    <input name="numero" type="text" placeholder="42" value={form.numero} onChange={handleChange} className={inputClass('numero')} />
                     {errors.numero && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.numero}</p>}
                   </div>
-                  {/* Complemento */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Complemento</label>
-                    <input name="complemento" type="text" placeholder="Apto, bloco, andar..." value={form.complemento} onChange={handleChange}
-                      className={inputClass('complemento')} />
+                    <input name="complemento" type="text" placeholder="Apto, bloco, andar..." value={form.complemento} onChange={handleChange} className={inputClass('complemento')} />
                   </div>
-                  {/* Cidade */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Cidade *</label>
-                    <input name="city" type="text" placeholder="São Paulo" value={form.city} onChange={handleChange}
-                      className={inputClass('city')} />
+                    <input name="city" type="text" placeholder="São Paulo" value={form.city} onChange={handleChange} className={inputClass('city')} />
                     {errors.city && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.city}</p>}
                   </div>
-                  {/* Estado */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Estado</label>
-                    <input name="state" type="text" placeholder="SP" value={form.state} onChange={handleChange}
-                      className={inputClass('state')} maxLength={2} />
+                    <input name="state" type="text" placeholder="SP" value={form.state} onChange={handleChange} className={inputClass('state')} maxLength={2} />
                   </div>
                 </div>
               </section>
 
-              {/* ── ENTREGA CORREIOS ── */}
+              {/* ENTREGA */}
               <section className="space-y-8">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-8 bg-[#00f3ff]" />
@@ -538,20 +543,13 @@ export default function CheckoutPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {SHIPPING_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.id}
-                      onClick={() => setShipping(opt.id)}
+                    <button key={opt.id} onClick={() => setShipping(opt.id)}
                       className={`block text-left p-6 bg-black/40 border-2 rounded-3xl transition-all cursor-pointer ${
-                        shipping === opt.id
-                          ? 'border-[#00f3ff] shadow-[0_0_15px_rgba(0,243,255,0.2)]'
-                          : 'border-white/5 hover:border-white/10'
-                      }`}
-                    >
+                        shipping === opt.id ? 'border-[#00f3ff] shadow-[0_0_15px_rgba(0,243,255,0.2)]' : 'border-white/5 hover:border-white/10'
+                      }`}>
                       <div className="flex justify-between items-start mb-4">
                         <Icon icon={opt.icon} className="text-2xl text-zinc-500" />
-                        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: opt.color }}>
-                          {opt.priceLabel}
-                        </span>
+                        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: opt.color }}>{opt.priceLabel}</span>
                       </div>
                       <div className="flex items-center gap-2 mb-1">
                         <Icon icon="simple-icons:correios" className="text-base text-yellow-500" />
@@ -563,25 +561,21 @@ export default function CheckoutPage() {
                 </div>
               </section>
 
-              {/* ── PAGAMENTO ── */}
+              {/* PAGAMENTO */}
               <section className="space-y-8">
                 <div className="flex items-center gap-4">
                   <div className="w-2 h-8 bg-[#00ff00]" />
                   <h2 className="text-xl md:text-3xl font-black uppercase tracking-tighter">Pagamento Seguro</h2>
                 </div>
 
-                {/* Tabs */}
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   {(['credito', 'pix'] as PayMethod[]).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setPayMethod(m)}
+                    <button key={m} onClick={() => setPayMethod(m)}
                       className={`flex items-center gap-3 px-6 py-3 rounded-2xl border-2 font-black uppercase text-xs tracking-widest transition-all cursor-pointer ${
                         payMethod === m
                           ? 'border-[#00ff00] bg-[#00ff00]/10 text-[#00ff00] shadow-[0_0_15px_rgba(0,255,0,0.2)]'
                           : 'border-white/5 text-zinc-500 hover:border-white/10'
-                      }`}
-                    >
+                      }`}>
                       <Icon icon={m === 'credito' ? 'lucide:credit-card' : 'simple-icons:pix'} className="text-lg" />
                       {m === 'credito' ? 'Cartão de Crédito' : 'PIX'}
                     </button>
@@ -591,39 +585,30 @@ export default function CheckoutPage() {
                 <div className="p-8 bg-black/60 border-2 border-white/5 rounded-[40px] space-y-6">
                   {payMethod === 'credito' ? (
                     <>
-                      {/* Nome no cartão */}
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Nome no Cartão *</label>
-                        <input name="cardName" type="text" placeholder="NOME SOBRENOME" value={form.cardName} onChange={handleChange}
-                          className={`w-full bg-zinc-900/50 border-2 rounded-2xl px-6 py-4 text-white placeholder:text-zinc-800 outline-none transition-all uppercase ${errors.cardName ? 'border-red-500' : 'border-white/5 focus:border-[#00ff00]'}`} />
-                        {errors.cardName && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.cardName}</p>}
-                      </div>
-                      {/* Número */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Número do Cartão *</label>
-                        <div className="relative">
-                          <input name="cardNumber" type="text" inputMode="numeric" placeholder="0000 0000 0000 0000" value={form.cardNumber} onChange={handleChange}
-                            className={`w-full bg-zinc-900/50 border-2 rounded-2xl px-6 py-4 pr-16 text-white placeholder:text-zinc-800 outline-none transition-all ${errors.cardNumber ? 'border-red-500' : 'border-white/5 focus:border-[#00ff00]'}`} />
-                          <Icon icon="logos:mastercard" className="absolute right-6 top-1/2 -translate-y-1/2 text-2xl" />
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Dados do Cartão *</label>
+                        <div className={`bg-zinc-900/50 border-2 rounded-2xl px-6 py-4 transition-all ${errors.card ? 'border-red-500' : 'border-white/5 focus-within:border-[#00ff00]'}`}>
+                          <CardElement
+                            options={{
+                              style: {
+                                base: {
+                                  color: '#ffffff',
+                                  fontFamily: 'monospace',
+                                  fontSize: '16px',
+                                  '::placeholder': { color: '#52525b' },
+                                },
+                                invalid: { color: '#f87171' },
+                              },
+                              hidePostalCode: true,
+                            }}
+                            onChange={(e) => {
+                              if (e.error) setErrors((er) => ({ ...er, card: e.error?.message }))
+                              else setErrors((er) => ({ ...er, card: undefined }))
+                            }}
+                          />
                         </div>
-                        {errors.cardNumber && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.cardNumber}</p>}
+                        {errors.card && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.card}</p>}
                       </div>
-                      {/* Validade + CVV */}
-                      <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Validade *</label>
-                          <input name="cardExpiry" type="text" inputMode="numeric" placeholder="MM/AA" value={form.cardExpiry} onChange={handleChange}
-                            className={`w-full bg-zinc-900/50 border-2 rounded-2xl px-6 py-4 text-white placeholder:text-zinc-800 outline-none transition-all ${errors.cardExpiry ? 'border-red-500' : 'border-white/5 focus:border-[#00ff00]'}`} />
-                          {errors.cardExpiry && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.cardExpiry}</p>}
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">CVV *</label>
-                          <input name="cardCvv" type="text" inputMode="numeric" placeholder="123" value={form.cardCvv} onChange={handleChange}
-                            className={`w-full bg-zinc-900/50 border-2 rounded-2xl px-6 py-4 text-white placeholder:text-zinc-800 outline-none transition-all ${errors.cardCvv ? 'border-red-500' : 'border-white/5 focus:border-[#00ff00]'}`} />
-                          {errors.cardCvv && <p className="text-red-400 text-[10px] font-bold ml-4">{errors.cardCvv}</p>}
-                        </div>
-                      </div>
-                      {/* Parcelamento */}
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-4">Parcelamento</label>
                         <select name="installments" value={form.installments} onChange={handleChange}
@@ -637,7 +622,6 @@ export default function CheckoutPage() {
                       </div>
                     </>
                   ) : (
-                    /* PIX */
                     <div className="space-y-6 py-2">
                       <div className="flex items-center justify-between p-4 bg-[#00ff00]/5 rounded-2xl border border-[#00ff00]/20">
                         <div>
@@ -655,13 +639,13 @@ export default function CheckoutPage() {
 
                   <div className="flex items-center gap-3 p-4 bg-[#00ff00]/5 rounded-2xl border border-[#00ff00]/10">
                     <Icon icon="lucide:shield-check" className="text-[#00ff00] text-xl shrink-0" />
-                    <p className="text-[10px] font-bold text-[#00ff00] uppercase tracking-widest">Seus dados estão protegidos com criptografia SSL</p>
+                    <p className="text-[10px] font-bold text-[#00ff00] uppercase tracking-widest">Pagamentos processados com segurança pela Stripe</p>
                   </div>
                 </div>
               </section>
             </div>
 
-            {/* ── RIGHT: ORDER SUMMARY ─────────────────────── */}
+            {/* ── RIGHT: ORDER SUMMARY ── */}
             <aside className="w-full lg:w-96 lg:shrink-0">
               <div className="lg:sticky lg:top-28 space-y-6 lg:space-y-8">
                 <div className="bg-zinc-900/80 border-2 border-white/5 rounded-[32px] md:rounded-[40px] p-6 md:p-8 space-y-6 md:space-y-8 shadow-2xl">
@@ -669,7 +653,6 @@ export default function CheckoutPage() {
                     Resumo do Pedido
                   </h2>
 
-                  {/* Items */}
                   <div className="space-y-4 max-h-64 overflow-y-auto pr-1">
                     {items.map((item) => (
                       <div key={item.slug} className="flex gap-4">
@@ -679,9 +662,7 @@ export default function CheckoutPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="text-xs font-black uppercase text-zinc-200 leading-tight truncate">{item.name}</h4>
-                          <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">
-                            {item.qty}x · R$ {item.price.toFixed(2).replace('.', ',')}
-                          </p>
+                          <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">{item.qty}x · R$ {item.price.toFixed(2).replace('.', ',')}</p>
                           <p className="text-[10px] font-black mt-0.5" style={{ color: item.color || '#00f3ff' }}>
                             R$ {(item.price * item.qty).toFixed(2).replace('.', ',')}
                           </p>
@@ -690,11 +671,9 @@ export default function CheckoutPage() {
                     ))}
                   </div>
 
-                  {/* Totals */}
                   <div className="space-y-4 pt-6 border-t border-white/5">
                     <div className="flex justify-between text-xs font-bold uppercase text-zinc-500">
-                      <span>Subtotal</span>
-                      <span>R$ {total.toFixed(2).replace('.', ',')}</span>
+                      <span>Subtotal</span><span>R$ {total.toFixed(2).replace('.', ',')}</span>
                     </div>
                     <div className="flex justify-between text-xs font-bold uppercase">
                       <span className="text-zinc-500">Entrega ({shippingOption.label})</span>
@@ -737,11 +716,8 @@ export default function CheckoutPage() {
                         onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(null); setCouponResult(null) }}
                         className="flex-1 bg-black/40 border-2 border-white/5 rounded-xl px-4 py-3 text-white placeholder:text-zinc-700 outline-none transition-all text-xs font-mono focus:border-[#00f3ff] uppercase"
                       />
-                      <button
-                        onClick={applyCoupon}
-                        disabled={couponLoading || !couponCode.trim()}
-                        className="shrink-0 px-4 py-3 bg-[#00f3ff]/10 border border-[#00f3ff]/30 rounded-xl text-[#00f3ff] hover:bg-[#00f3ff]/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase"
-                      >
+                      <button onClick={applyCoupon} disabled={couponLoading || !couponCode.trim()}
+                        className="shrink-0 px-4 py-3 bg-[#00f3ff]/10 border border-[#00f3ff]/30 rounded-xl text-[#00f3ff] hover:bg-[#00f3ff]/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase">
                         {couponLoading ? '...' : 'Aplicar'}
                       </button>
                     </div>
@@ -750,50 +726,48 @@ export default function CheckoutPage() {
                   </div>
 
                   {/* CTA */}
-                  <button
-                    onClick={handleSubmit}
-                    disabled={submitting}
-                    className="relative w-full group overflow-hidden mt-4 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                  >
+                  <button onClick={handleSubmit} disabled={submitting || !stripe}
+                    className="relative w-full group overflow-hidden mt-4 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer">
                     <div className="absolute -inset-1 bg-gradient-to-r from-[#00f3ff] via-[#ff00ff] to-[#00ff00] rounded-2xl blur opacity-25 group-hover:opacity-100 transition duration-500" />
                     <div className="relative flex items-center justify-center gap-3 w-full bg-white text-black py-4 md:py-6 rounded-2xl font-black uppercase text-xs md:text-sm tracking-[0.2em] transition-all group-hover:bg-black group-hover:text-white">
                       {submitting ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          Processando...
-                        </>
+                        <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />Processando...</>
                       ) : (
-                        <>
-                          Finalizar Compra
-                          <Icon icon="lucide:arrow-right" />
-                        </>
+                        <>Finalizar Compra<Icon icon="lucide:arrow-right" /></>
                       )}
                     </div>
                   </button>
 
-                  {orderError && <p className="text-red-400 text-sm font-bold mt-2">{orderError}</p>}
+                  {orderError && <p className="text-red-400 text-sm font-bold mt-2 text-center">{orderError}</p>}
 
-                  {/* Payment icons */}
                   <div className="flex justify-center gap-4 pt-2">
                     <Icon icon="simple-icons:pix" className="text-2xl text-[#32BCAD]" />
                     <Icon icon="logos:visa" className="text-2xl" />
                     <Icon icon="logos:mastercard" className="text-2xl" />
-                    <Icon icon="simple-icons:correios" className="text-2xl text-yellow-500" />
+                    <Icon icon="simple-icons:stripe" className="text-2xl text-[#6772e5]" />
                   </div>
                 </div>
 
                 <div className="p-6 border-2 border-white/5 rounded-3xl text-center space-y-3">
                   <Icon icon="lucide:lock" className="text-2xl text-zinc-500" />
                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Ambiente 100% Seguro</p>
-                  <p className="text-[10px] text-zinc-600 uppercase">Dados protegidos com criptografia de ponta a ponta.</p>
+                  <p className="text-[10px] text-zinc-600 uppercase">Dados protegidos pela Stripe com criptografia de ponta a ponta.</p>
                 </div>
               </div>
             </aside>
           </div>
         </div>
       </main>
-
       <Footer />
     </div>
+  )
+}
+
+// ─── Wrapper com Elements provider ───────────────────────────────────────────
+export default function CheckoutPage() {
+  return (
+    <Elements stripe={stripePromise}>
+      <CheckoutForm />
+    </Elements>
   )
 }
