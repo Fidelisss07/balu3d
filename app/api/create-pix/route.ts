@@ -5,7 +5,7 @@ export async function POST(req: NextRequest) {
   try {
     const { amount, orderId } = await req.json()
 
-    if (!amount || amount < 50) {
+    if (!amount || amount < 0.5) {
       return NextResponse.json({ error: 'Valor inválido' }, { status: 400 })
     }
 
