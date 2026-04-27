@@ -6,6 +6,13 @@ import { CartProvider } from '@/context/CartContext'
 export const metadata: Metadata = {
   title: 'Balu 3D | Impressões 3D Geek & Gamer',
   description: 'Colecionáveis 3D de luxo em resina 8K — figuras Geek, Gamer e Pokémon.',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
+  openGraph: {
+    images: ['/logo.png'],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
